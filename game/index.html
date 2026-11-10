@@ -156,7 +156,7 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
       <dl class="keys-help">
         <dt>W ↑ / S ↓</dt><dd>газ / спирачка и назад</dd>
         <dt>A D ← →</dt><dd>завой; на висока скорост завива по-малко</dd>
-        <dt>Интервал</dt><dd>скок; задръж в завой за дрифт и турбо</dd>
+        <dt>Интервал</dt><dd>скок; задръж и завий за дрифт. Искрите стават сини, оранжеви и лилави; пусни за турбо</dd>
         <dt>R · P</dt><dd>обратно на пистата · пауза</dd>
         <dt>Геймпад</dt><dd>лява ръчка, R2 газ, L2 спирачка, A дрифт</dd>
       </dl>
@@ -1374,11 +1374,11 @@ function readPad() {
 // longitudinal: engine curve, rolling resistance and air drag; lateral: tyres can only
 // correct sideways speed up to their grip limit, so pushing too hard makes the kart slide
 const TIRE = {
-  slick: { power: 17, vmax: 31, mu: 1.0, muOff: .42, roll: .5, rollOff: 5, name: 'пистови слик' },
-  lunar: { power: 16, vmax: 28.5, mu: .86, muOff: .8, roll: .7, rollOff: 1.4, name: 'лунни мрежести' },
-  hover: { power: 18, vmax: 33.5, mu: .58, muOff: .52, roll: .3, rollOff: .5, name: 'ховър' }
+  slick: { power: 20, vmax: 31, mu: 1.0, muOff: .42, roll: .5, rollOff: 5, name: 'пистови слик' },
+  lunar: { power: 19, vmax: 28.5, mu: .86, muOff: .8, roll: .7, rollOff: 1.4, name: 'лунни мрежести' },
+  hover: { power: 21, vmax: 33.5, mu: .58, muOff: .52, roll: .3, rollOff: .5, name: 'ховър' }
 };
-const GRIP = 27, WHEELBASE = 1.64;
+const GRIP = 40, WHEELBASE = 1.5;
 const P = {};
 let state = 'boot', countT = 0, raceT0 = 0, lapT0 = 0, endT = 0, msgT = 0, camHead = 0, landBump = 0, shake = 0, raceCoins = 0, lastCount = 4;
 function fmt(s) { if (s == null) return '—'; const m = Math.floor(s / 60), r = s - m * 60; return m + ':' + (r < 10 ? '0' : '') + r.toFixed(2); }
@@ -1386,7 +1386,7 @@ function msg(text, dur, small) { const m = $('msg'); m.textContent = text; m.cla
 const bestKey = () => save.track + ':' + save.wheels;
 function placeAt(i) {
   P.x = TP[i].x; P.z = TP[i].z; P.y = 0; P.head = headingAt(i);
-  P.vx = P.vz = P.vf = P.vl = P.vy = 0; P.yaw = 0; P.air = false; P.drift = 0; P.charge = 0; P.boost = 0; P.boostKind = 0; P.steer = 0;
+  P.vx = P.vz = P.vf = P.vl = P.vy = 0; P.yaw = 0; P.air = false; P.drift = 0; P.charge = 0; P.level = 0; P.boost = 0; P.boostKind = 0; P.boostPow = 1; P.steer = 0; P.hop = false; P.driftDir = 0; P.sparkBurst = 0;
   P.idx = i; P.prevF = i / N; P.wrong = 0; P.off = false; P.slip = 0; P.accLong = 0; P.accLat = 0;
 }
 function resetRace() {
@@ -1396,10 +1396,15 @@ function resetRace() {
   skid.reset();
 }
 function respawn() { const keep = { cp: P.cp, lap: P.lap, laps: P.laps, prevF: P.prevF }; placeAt(P.idx); Object.assign(P, keep); msg('Обратно на пистата', .9, true); }
-function endDrift() {
-  if (P.charge > 2.1) { P.boost = 1.3; P.boostKind = 2; msg('Супер турбо!', .7, true); blip(880, .12); }
-  else if (P.charge > 1) { P.boost = .75; P.boostKind = 1; blip(660, .1); }
-  P.drift = 0; P.charge = 0;
+function endDrift(boostOk) {
+  const lv = boostOk ? P.level : 0;
+  if (lv) {
+    P.boost = [0, .6, 1.05, 1.5][lv]; P.boostKind = lv; P.boostPow = [1, 1.7, 2.2, 2.7][lv];
+    blip([0, 660, 880, 1100][lv], .14); if (lv >= 2) msg(lv === 3 ? 'Ултра турбо!' : 'Супер турбо!', .7, true);
+  }
+  const tr = Math.atan2(P.vx, P.vz);
+  P.head = angLerp(tr, P.head, .45); P.yaw = 0;
+  P.drift = 0; P.charge = 0; P.level = 0;
 }
 function completeLap(t) {
   const lt = t - lapT0; lapT0 = t; P.laps.push(lt); P.cp = false;
@@ -1419,6 +1424,7 @@ function rampAt(x, z) {
 }
 function hit(impact, x, y, z) {
   if (impact < 1.5) return;
+  if (impact > 4 && P.drift) endDrift(false);
   shake = Math.min(1, shake + impact * .08);
   blip(90 + Math.random() * 30, .14, 'sawtooth');
   for (let k = 0; k < 6; k++) emit(tmp.set(x, y + .4, z), (Math.random() - .5) * 4, Math.random() * 3, (Math.random() - .5) * 4, .3, .06, .4, 0xffd9a0, true, 1, -8);
@@ -1429,67 +1435,87 @@ function physics(dt, t, live) {
   const gas = live && keys.gas, brake = live && keys.brake;
   let target = live ? (keys.left ? 1 : 0) - (keys.right ? 1 : 0) : 0;
   if (live && padUsed && padSteer) target = padSteer;
-  P.steer += (target - P.steer) * Math.min(1, dt * 6);
+  P.steer += (target - P.steer) * Math.min(1, dt * 16);
   let info = trackInfo(P.x, P.z, P.idx); P.idx = info.i;
   const grounded = !P.air;
   P.off = Math.abs(info.lat) > ROAD_W / 2 + .9;
   let onIce = false;
   for (const c of W.ice) if ((P.x - c.x) ** 2 + (P.z - c.z) ** 2 < c.r * c.r) onIce = true;
-  let mu = (P.off ? T.muOff : T.mu) * (onIce ? .28 : 1);
+  let mu = (P.off ? T.muOff : T.mu) * (onIce ? .3 : 1);
   if (!grounded) mu = 0;
+  const vmax = T.vmax * (P.boost > 0 ? 1.3 : 1);
+  const push = P.boost > 0 ? P.boostPow : 1;
 
-  const fx = Math.sin(P.head), fz = Math.cos(P.head), lx = Math.cos(P.head), lz = -Math.sin(P.head);
-  let vf = P.vx * fx + P.vz * fz, vl = P.vx * lx + P.vz * lz;
-  const vf0 = vf, vl0 = vl;
-  // engine, brakes, resistance
-  const vmax = T.vmax * (P.boost > 0 ? 1.28 : 1);
-  let F = 0;
-  if ((gas || P.boost > 0) && vf < vmax) F += T.power * (P.boost > 0 ? 2.2 : 1) * Math.max(.12, 1 - (vf / vmax) ** 2);
-  if (brake) F += vf > .5 ? -26 * Math.max(.35, mu) : (vf > -8 ? -7 : 0);
-  F -= vf * Math.abs(vf) * .006 + Math.sign(vf) * (P.off ? T.rollOff : T.roll) * (grounded ? 1 : .2);
-  if (!gas && !brake && P.boost <= 0) F -= Math.sign(vf) * 1.2;
-  if (vf > vmax) F -= (vf - vmax) * 2;
-  const before = vf; vf += F * dt;
-  if (!gas && !brake && Math.sign(before) !== Math.sign(vf) && Math.abs(before) < 1.5) vf = 0;
-  if (P.boost > 0) P.boost -= dt;
-
-  // hop and drift
+  // a short, snappy hop; steering before or during it picks the drift side
   if (hopPressed) {
     hopPressed = false;
-    if (grounded && live) { P.vy = 2.6; P.air = true; if (Math.abs(target) > .3 && vf > 9) { P.drift = Math.sign(target); P.charge = 0; } }
+    if (grounded && live) { P.vy = 2.3; P.air = true; P.hop = true; P.driftDir = Math.abs(target) > .3 ? Math.sign(target) : 0; }
   }
-  if (P.drift && (!keys.hop || vf < 6 || !live)) endDrift();
+  if (P.hop && P.air && !P.driftDir && Math.abs(target) > .3) P.driftDir = Math.sign(target);
 
-  // steering: the front wheels turn less as speed rises, and grip caps the yaw
-  const maxSteer = .52 - .36 * Math.min(1, Math.abs(vf) / 28);
-  let yawT;
+  let speed = Math.hypot(P.vx, P.vz);
+  const vf0 = P.vf || 0;
   if (P.drift) {
-    yawT = (P.drift * .6 + P.steer * .5) * 1.75 * Math.min(1, Math.abs(vf) / 12);
-    if (grounded) P.charge += dt * (.7 + Math.max(0, P.steer * P.drift) * .9);
+    // the kart follows an arc while its nose points into the corner;
+    // steering into the drift tightens it, steering out widens it
+    const dir = P.drift, sIn = P.steer * dir;
+    let F = 0;
+    if ((gas || P.boost > 0) && speed < vmax) F += T.power * push * Math.max(.12, 1 - (speed / vmax) ** 2);
+    if (brake) F -= 18;
+    F -= speed * speed * .006 + (P.off ? T.rollOff : T.roll) + 1.2;
+    speed = Math.max(0, speed + F * dt);
+    const travel = Math.atan2(P.vx, P.vz);
+    const omega = dir * (1.25 + .65 * sIn) * Math.min(1, speed / 12) * (.7 + .3 * Math.max(mu, .4));
+    const nt = travel + omega * dt;
+    P.vx = Math.sin(nt) * speed; P.vz = Math.cos(nt) * speed;
+    P.head = angLerp(P.head, nt + dir * (.46 + .14 * sIn), Math.min(1, dt * 10));
+    P.yaw = omega;
+    if (grounded) {
+      const before = P.level;
+      P.charge += dt * (1.2 + .8 * Math.max(0, sIn)) * (P.off ? .5 : 1);
+      P.level = P.charge >= 3 ? 3 : P.charge >= 2 ? 2 : P.charge >= 1 ? 1 : 0;
+      if (P.level > before) { blip([0, 520, 700, 940][P.level], .07, 'triangle'); P.sparkBurst = 1; }
+    }
+    if (!keys.hop || !live) endDrift(true);
+    else if (speed < 6) endDrift(false);
   } else {
-    yawT = vf * Math.tan(P.steer * maxSteer) / WHEELBASE;
+    const fx = Math.sin(P.head), fz = Math.cos(P.head), lx = Math.cos(P.head), lz = -Math.sin(P.head);
+    let vf = P.vx * fx + P.vz * fz, vl = P.vx * lx + P.vz * lz;
+    let F = 0;
+    if ((gas || P.boost > 0) && vf < vmax) F += T.power * push * Math.max(.14, 1 - (vf / vmax) ** 2);
+    if (brake) F += vf > .5 ? -32 * Math.max(.35, mu) : (vf > -8 ? -9 : 0);
+    F -= vf * Math.abs(vf) * .006 + Math.sign(vf) * (P.off ? T.rollOff : T.roll) * (grounded ? 1 : .2);
+    if (!gas && !brake && P.boost <= 0) F -= Math.sign(vf) * 1.6;
+    if (vf > vmax) F -= (vf - vmax) * 2;
+    const before = vf; vf += F * dt;
+    if (!gas && !brake && Math.sign(before) !== Math.sign(vf) && Math.abs(before) < 1.5) vf = 0;
+    // quick steering: wide lock at low speed, less at high speed, capped by grip
+    const maxSteer = .62 - .32 * Math.min(1, Math.abs(vf) / 30);
+    let yawT = vf * Math.tan(P.steer * maxSteer) / WHEELBASE;
     const latMax = mu * GRIP + .5, need = Math.abs(vf * yawT);
-    if (need > latMax) yawT *= latMax / need; // understeer at the limit
+    if (need > latMax) yawT *= latMax / need;
+    if (!grounded) yawT = P.yaw;
+    P.yaw += (yawT - P.yaw) * Math.min(1, dt * 18 * Math.max(.3, mu));
+    P.head += P.yaw * dt;
+    const nfx = Math.sin(P.head), nfz = Math.cos(P.head), nlx = Math.cos(P.head), nlz = -Math.sin(P.head);
+    const wx = fx * vf + lx * vl, wz = fz * vf + lz * vl;
+    vf = wx * nfx + wz * nfz; vl = wx * nlx + wz * nlz;
+    vl -= Math.sign(vl) * Math.min(Math.abs(vl), mu * GRIP * dt);
+    P.vx = nfx * vf + nlx * vl; P.vz = nfz * vf + nlz * vl;
+    speed = Math.hypot(P.vx, P.vz);
   }
-  if (!grounded) yawT = P.yaw;
-  P.yaw += (yawT - P.yaw) * Math.min(1, dt * (P.drift ? 5 : 10 * Math.max(.25, mu)));
-  P.head += P.yaw * dt;
-  // velocity stays in the world; after the kart rotates, the tyres pull it back in line
-  const nfx = Math.sin(P.head), nfz = Math.cos(P.head), nlx = Math.cos(P.head), nlz = -Math.sin(P.head);
-  const wx = fx * vf + lx * vl, wz = fz * vf + lz * vl;
-  vf = wx * nfx + wz * nfz; vl = wx * nlx + wz * nlz;
-  const corr = mu * GRIP * dt * (P.drift ? .32 : 1);
-  if (P.drift) vl += (-P.drift * Math.abs(vf) * .18 - vl) * Math.min(1, dt * 2.5);
-  else vl -= Math.sign(vl) * Math.min(Math.abs(vl), corr);
-  P.slip = Math.abs(vl);
-  P.vx = nfx * vf + nlx * vl; P.vz = nfz * vf + nlz * vl;
-  P.vf = vf; P.vl = vl;
-  P.accLong += ((vf - vf0) / dt - P.accLong) * Math.min(1, dt * 6);
-  P.accLat += ((vf * P.yaw) - P.accLat) * Math.min(1, dt * 6);
+  {
+    const fx = Math.sin(P.head), fz = Math.cos(P.head), lx = Math.cos(P.head), lz = -Math.sin(P.head);
+    P.vf = P.vx * fx + P.vz * fz; P.vl = P.vx * lx + P.vz * lz;
+  }
+  if (P.boost > 0) P.boost -= dt;
+  P.slip = Math.abs(P.vl);
+  P.accLong += ((P.vf - vf0) / dt - P.accLong) * Math.min(1, dt * 6);
+  P.accLat += ((P.vf * P.yaw) - P.accLat) * Math.min(1, dt * 6);
   P.x += P.vx * dt; P.z += P.vz * dt;
 
   // boost pads, coins
-  if (grounded) for (const b of W.pads) if ((P.x - b.x) ** 2 + (P.z - b.z) ** 2 < 7 && P.boost < .7) { P.boost = 1.1; P.boostKind = 3; blip(520, .12); }
+  if (grounded) for (const b of W.pads) if ((P.x - b.x) ** 2 + (P.z - b.z) ** 2 < 7 && P.boost < .7) { P.boost = 1.1; P.boostKind = 4; P.boostPow = 2.2; blip(520, .12); }
   for (const c of W.coins) if (!c.taken && (P.x - c.x) ** 2 + (P.z - c.z) ** 2 < 2.6 && Math.abs(P.y + .8 - 1) < 1.6) {
     c.taken = true; c.m.visible = false; raceCoins++; blip(1320, .08, 'triangle');
     for (let k = 0; k < 6; k++) emit(c.m.position, (Math.random() - .5) * 3, 1 + Math.random() * 2, (Math.random() - .5) * 3, .4, .12, .5, 0xffd34f, true, 1, -4);
@@ -1503,9 +1529,8 @@ function physics(dt, t, live) {
       if (d2 > rr * rr || P.y > 1.6) continue;
       const d = Math.sqrt(d2) || .001, nx = dx / d, nz = dz / d, pen = rr - d;
       if (o.kind === 'cone' || o.kind === 'barrel') {
-        // light obstacles get knocked away
-        const vn = P.vx * nx + P.vz * nz;
-        o.vx = -nx * Math.max(4, Math.hypot(P.vx, P.vz) * (o.kind === 'cone' ? 1.1 : .6)); o.vz = -nz * Math.max(4, Math.hypot(P.vx, P.vz) * (o.kind === 'cone' ? 1.1 : .6));
+        const vn = P.vx * nx + P.vz * nz, sp = Math.hypot(P.vx, P.vz) * (o.kind === 'cone' ? 1.1 : .6);
+        o.vx = -nx * Math.max(4, sp); o.vz = -nz * Math.max(4, sp);
         o.x -= nx * pen; o.z -= nz * pen; o.knocked = 1;
         const loss = o.kind === 'cone' ? .96 : .82; P.vx *= loss; P.vz *= loss;
         if (o.kind === 'barrel') hit(Math.abs(vn) * .8, o.x, 0, o.z); else blip(300, .06, 'triangle');
@@ -1525,13 +1550,21 @@ function physics(dt, t, live) {
     if (vn > 0) { P.vx -= 1.3 * vn * l.x * side; P.vz -= 1.3 * vn * l.z * side; P.vx *= .9; P.vz *= .9; hit(vn, P.x + l.x * side, P.y, P.z + l.z * side); }
   }
 
-  // height: ramps, terrain, jumps in low gravity
+  // height: ramps, terrain, low-gravity jumps; landing a hop with the button held starts a drift
   const ra = rampAt(P.x, P.z);
   const ground = ra ? ra.h + .04 : terrainY(P.x, P.z, info.dist);
   if (P.air) {
-    P.vy -= G * dt; P.y += P.vy * dt;
-    if (P.y <= ground) { landBump = Math.min(1, -P.vy / 7); if (landBump > .35) blip(140, .12); P.y = ground; P.air = false; P.vy = 0; }
-  } else if (ra) { P.y = ground; P.vy = Math.max(0, vf) * ra.slope; }
+    P.vy -= G * (P.hop ? 2.4 : 1) * dt; P.y += P.vy * dt;
+    if (P.y <= ground) {
+      landBump = Math.min(1, -P.vy / 7); if (landBump > .35 && !P.hop) blip(140, .12);
+      P.y = ground; P.air = false; P.vy = 0;
+      if (P.hop) {
+        P.hop = false;
+        if (live && keys.hop && P.driftDir && Math.hypot(P.vx, P.vz) > 8) { P.drift = P.driftDir; P.charge = 0; P.level = 0; blip(260, .05, 'sawtooth'); }
+        P.driftDir = 0;
+      }
+    }
+  } else if (ra) { P.y = ground; P.vy = Math.max(0, P.vf) * ra.slope; }
   else if (P.vy > 1 && ground < P.y - .2) P.air = true;
   else { P.y = ground; P.vy = 0; }
 
@@ -1540,8 +1573,9 @@ function physics(dt, t, live) {
   if (live) {
     if (f > .45 && f < .6) P.cp = true;
     if (P.cp && P.prevF > .85 && f < .15) completeLap(t);
-    const dirDot = nfx * TT[P.idx].x + nfz * TT[P.idx].z;
-    P.wrong = vf > 4 && dirDot < -.3 ? P.wrong + dt : 0;
+    const mvx = P.vx / (speed || 1), mvz = P.vz / (speed || 1);
+    const dirDot = mvx * TT[P.idx].x + mvz * TT[P.idx].z;
+    P.wrong = speed > 4 && dirDot < -.3 ? P.wrong + dt : 0;
     if (P.wrong > 1 && msgT <= 0) msg('Обратна посока!', 1, true);
   }
   P.prevF = f;
@@ -1568,12 +1602,13 @@ function moveWorld(dt, t) {
 
 /* ================= visuals and camera ================= */
 const tmp = V3(0, 0, 0), tmp2 = V3(0, 0, 0), look = V3(0, 0, 0);
-let spin = 0, emitAcc = 0, garageT = 0;
+let spin = 0, emitAcc = 0, garageT = 0, camSnap = false;
+const SPARK = [0xfff2c4, 0x4fb8ff, 0xff8a3d, 0xc46bff], BOOSTC = [0, 0x4fb8ff, 0xff8a3d, 0xc46bff, 0x5fe8ff];
 function angLerp(a, b, k) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * k; }
 function visuals(dt, t) {
   const still = calm.matches, hov = save.wheels === 'hover';
   K.root.position.set(P.x, P.y, P.z);
-  K.root.rotation.y = P.head + P.drift * .3;
+  K.root.rotation.y = P.head;
   K.body.position.y = hov ? .16 + (still ? 0 : Math.sin(t * 2) * .03) : 0;
   // body roll and pitch from the real accelerations, a little suspension on landing
   const roll = Math.max(-.09, Math.min(.09, -P.accLat * .0045)), pitch = Math.max(-.06, Math.min(.06, P.accLong * .0035));
@@ -1581,11 +1616,11 @@ function visuals(dt, t) {
   K.body.rotation.x += ((P.air ? Math.max(-.25, Math.min(.2, -P.vy * .03)) : -pitch - landBump * .06) - K.body.rotation.x) * Math.min(1, dt * 8);
   landBump *= Math.exp(-dt * 6);
   spin += P.vf / .29 * dt;
-  const steerVis = P.steer * .38 + P.drift * .18;
-  for (const w of K.wheels) { w.spin.rotation.x = spin; if (w.front) w.steer.rotation.y = steerVis; }
-  K.swSpin.rotation.z = -steerVis * 2.2;
+  const wheelVis = P.drift ? -P.drift * .24 + P.steer * .14 : P.steer * .4;
+  for (const w of K.wheels) { w.spin.rotation.x = spin; if (w.front) w.steer.rotation.y = wheelVis; }
+  K.swSpin.rotation.z = -wheelVis * 2.2;
   K.root.updateMatrixWorld(true);
-  if (driver) driver.pose(t, steerVis * 1.1, 1, still);
+  if (driver) driver.pose(t, P.drift ? P.drift * .55 + P.steer * .1 : P.steer * .42, 1, still);
   if (costume) {
     costume.prop.rotation.y += dt * (6 + Math.abs(P.vf) * 1.2);
     costume.capeMesh.rotation.x = .12 + Math.min(1.1, Math.abs(P.vf) * .035) + (still ? 0 : Math.sin(t * 9) * .04 * Math.min(1, Math.abs(P.vf) / 10));
@@ -1603,14 +1638,19 @@ function visuals(dt, t) {
         if (grounded && Math.abs(P.vf) > 4 && (!hov || P.off) && Math.random() < (P.off ? .9 : .3) * sf)
           emit(tmp, (Math.random() - .5) * 1.2, .5 + Math.random() * .8, (Math.random() - .5) * 1.2, 1 + Math.random() * .6, .35, 3, TR.theme === 'dusk' ? 0x9b8f84 : 0x9a9ba1, false, .28, .15);
         if (P.drift && grounded) {
-          const c = P.charge > 2.1 ? 0xff8a3d : P.charge > 1 ? 0x4fb8ff : 0xfff2c4;
-          emit(tmp, (Math.random() - .5) * 3, 1 + Math.random() * 2, (Math.random() - .5) * 3, .25, .12, .3, c, true, 1, -6);
+          const c = SPARK[P.level], n = P.level ? 2 : 1, ox = Math.cos(P.head) * -P.drift, oz = -Math.sin(P.head) * -P.drift;
+          for (let q = 0; q < n; q++) emit(tmp, ox * 2 + (Math.random() - .5) * 2.5, .8 + Math.random() * 2, oz * 2 + (Math.random() - .5) * 2.5, .28, P.level ? .2 : .12, .3, c, true, 1, -7);
+          if (!hov && Math.random() < .7) emit(tmp, (Math.random() - .5) * .8, .4 + Math.random() * .5, (Math.random() - .5) * .8, 1.1, .3, 3.2, 0xd6d8de, false, .32, .25);
         }
         if (hov && Math.random() < .5) { K.root.localToWorld(tmp.set(s * .77, .02, s > 0 ? .82 : -.82)); emit(tmp, 0, -.6, 0, .35, .3, 1.5, 0x5fe8ff, true, .45, 0); }
       }
+      if (P.sparkBurst) {
+        P.sparkBurst = 0;
+        for (const s of [-1, 1]) { K.root.localToWorld(tmp.set(s * .8, .1, -1.05)); for (let q = 0; q < 10; q++) emit(tmp, (Math.random() - .5) * 6, 1 + Math.random() * 3, (Math.random() - .5) * 6, .35, .22, .2, SPARK[P.level], true, 1, -8); }
+      }
       if (P.boost > 0) {
         K.body.localToWorld(tmp.copy(K.exhaust));
-        const c = P.boostKind === 2 ? 0xff8a3d : P.boostKind === 3 ? 0x5fe8ff : 0x4fb8ff;
+        const c = BOOSTC[P.boostKind] || 0x4fb8ff;
         emit(tmp, -Math.sin(P.head) * 3, .4, -Math.cos(P.head) * 3, .22, .35, 1.4, c, true, .9, 0);
       }
     }
@@ -1635,12 +1675,13 @@ function visuals(dt, t) {
     camera.fov = close ? 40 : 50;
   } else {
     const sf = Math.min(1, Math.abs(P.vf) / 15);
-    camHead = angLerp(camHead, P.head + P.drift * .12, 1 - Math.exp(-dt * 4.5));
+    const moving = Math.hypot(P.vx, P.vz) > 3, travel = moving ? Math.atan2(P.vx, P.vz) : P.head;
+    camHead = angLerp(camHead, P.drift ? travel + P.drift * .16 : angLerp(travel, P.head, .7), 1 - Math.exp(-dt * 6));
     const fx = Math.sin(camHead), fz = Math.cos(camHead), dist = 5.3 + sf * 1.2;
     tmp2.set(P.x - fx * dist, P.y + 2.15 + (P.air ? .4 : 0), P.z - fz * dist);
     const ty = terrainY(tmp2.x, tmp2.z, trackInfo(tmp2.x, tmp2.z, P.idx).dist) + 1;
     if (tmp2.y < ty) tmp2.y = ty;
-    if (camera.position.distanceTo(tmp2) > 25) { camera.position.copy(tmp2); camHead = P.head; }
+    if (camSnap || camera.position.distanceTo(tmp2) > 25) { camera.position.copy(tmp2); if (!camSnap) camHead = P.head; }
     else camera.position.lerp(tmp2, 1 - Math.exp(-dt * 7));
     if (!still && shake > 0) { camera.position.x += (Math.random() - .5) * shake * .25; camera.position.y += (Math.random() - .5) * shake * .25; }
     if (P.boost > 0 && !still) camera.position.y += (Math.random() - .5) * .05;
@@ -1816,7 +1857,7 @@ function frame(now) {
 }
 buildWorld(TRACKS[save.track] ? save.track : (save.track = 'base'));
 resetRace(); applyLook(); toMenu();
-if (location.hash === '#debug') window.__td = { P, TP, TT, N, keys, save, W, get state() { return state; }, step(sec, fn) { for (let k = 0; k < sec * 60; k++) { if (fn) fn(); update(1 / 60); } } };
+if (location.hash === '#debug') window.__td = { P, TP, TT, N, keys, save, W, get state() { return state; }, set snap(v) { camSnap = v; }, step(sec, fn) { for (let k = 0; k < sec * 60; k++) { if (fn) fn(); update(1 / 60); } } };
 requestAnimationFrame(frame);
 setTimeout(() => {
   driver = buildDriver(K); costume = buildCostumes(driver); applyCostume();

@@ -1076,8 +1076,8 @@ const KEEP = []; // footprints the city must not build on
 function crowdBlock(parent, people, rr) {
   // people: array of [x, y, z]; each gets a body, a head and a raised or lowered arm pair
   const n = people.length, shirts = [0xe8322a, 0x2f7bff, 0xf2c230, 0x3aa548, 0xf4f4f4, 0xff7a1a, 0x8657d6, 0x1b2030, 0xee74ad], skin = [0xf1c7a3, 0xd9a07a, 0xa8714f, 0x6e4630, 0x8fd18a, 0x9ab7ff];
-  const body = new THREE.InstancedMesh(new THREE.CapsuleGeometry(.19, .42, 4, 8), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .8 }), n);
-  const head = new THREE.InstancedMesh(new THREE.SphereGeometry(.15, 10, 8), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .6 }), n);
+  const body = new THREE.InstancedMesh(new THREE.CapsuleGeometry(.19, .42, 1, 5), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .8 }), n);
+  const head = new THREE.InstancedMesh(new THREE.SphereGeometry(.15, 6, 4), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .6 }), n);
   const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(.62, .09, .09), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .8 }), n);
   const c = new THREE.Color(), data = [];
   people.forEach((p, j) => {
@@ -1085,9 +1085,19 @@ function crowdBlock(parent, people, rr) {
     body.setColorAt(j, c.setHex(sh)); arms.setColorAt(j, c.setHex(sh)); head.setColorAt(j, c.setHex(skin[(rr() * skin.length) | 0]));
     data.push({ x: p[0], y: p[1], z: p[2], ph: rr() * 6.28, sp: 6 + rr() * 5, fan: rr() });
   });
-  for (const m of [body, head, arms]) { m.castShadow = false; m.receiveShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); parent.add(m); }
-  const cr = { body, head, arms, data, parent, heat: 0 };
+  const bs = new THREE.Sphere(); bs.setFromPoints(people.map(q => new THREE.Vector3(q[0], q[1] + .8, q[2]))); bs.radius += 1.5;
+  for (const m of [body, head, arms]) { m.castShadow = false; m.receiveShadow = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.geometry.boundingSphere = bs.clone(); parent.add(m); }
+  const cr = { body, head, arms, data, parent, heat: 0, tick: W.crowds.length };
   poseCrowd(cr, 0, 0); W.crowds.push(cr);
+}
+// an instanced mesh is culled with its base geometry's bounds, so give it bounds that cover every instance
+function fitBounds(im) {
+  const box = new THREE.Box3(), m = new THREE.Matrix4(), p = new THREE.Vector3();
+  if (!im.geometry.boundingSphere) im.geometry.computeBoundingSphere();
+  const r = im.geometry.boundingSphere.radius;
+  for (let j = 0; j < im.count; j++) { im.getMatrixAt(j, m); p.setFromMatrixPosition(m); box.expandByPoint(p); }
+  const sp = new THREE.Sphere(); box.getBoundingSphere(sp); sp.radius += r * 6 + 2;
+  im.geometry = im.geometry.clone(); im.geometry.boundingSphere = sp;
 }
 const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
 function poseCrowd(cr, t, heat) {
@@ -1272,16 +1282,16 @@ function buildCity(rr) {
   }
   // the central spire
   drum(geos[2], 0, 0, 5, -.2, 160, 0, 0); drum(geos[0], 0, 0, 8, -.2, 22, 0, 0);
-  geos.forEach((list, k) => { if (!list.length) return; const m = new THREE.Mesh(mergeGeos(list), mats[k]); m.castShadow = m.receiveShadow = true; world.add(m); });
+  geos.forEach((list, k) => { if (!list.length) return; const m = new THREE.Mesh(mergeGeos(list), mats[k]); m.castShadow = false; m.receiveShadow = true; m.userData.keep = true; world.add(m); });
   // rooftop plant rooms, antennas, blinking aviation lights
   const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x4a4f59, roughness: .7, metalness: .3 }), plant.length);
   plant.forEach(([x, y, z, w, d, r], j) => { _m4.compose(_v.set(x, y + 1.3, z), _q.setFromEuler(_e.set(0, r, 0)), _s.set(w, 2.6, d)); im.setMatrixAt(j, _m4); }); _s.set(1, 1, 1);
-  im.castShadow = true; world.add(im);
+  fitBounds(im); im.castShadow = true; world.add(im);
   const am = new THREE.InstancedMesh(new THREE.CylinderGeometry(.08, .14, 1, 6), MAT.steel, ants.length);
-  ants.forEach(([x, y, z, h], j) => { _m4.compose(_v.set(x, y + h / 2, z), _q.identity(), _s.set(1, h, 1)); am.setMatrixAt(j, _m4); }); _s.set(1, 1, 1); world.add(am);
+  ants.forEach(([x, y, z, h], j) => { _m4.compose(_v.set(x, y + h / 2, z), _q.identity(), _s.set(1, h, 1)); am.setMatrixAt(j, _m4); }); _s.set(1, 1, 1); fitBounds(am); world.add(am);
   W.blink = new THREE.MeshBasicMaterial({ color: 0xff2a3a });
   const lm = new THREE.InstancedMesh(new THREE.SphereGeometry(.35, 8, 6), W.blink, lights.length);
-  lights.forEach(([x, y, z], j) => { _m4.makeTranslation(x, y, z); lm.setMatrixAt(j, _m4); }); world.add(lm);
+  lights.forEach(([x, y, z], j) => { _m4.makeTranslation(x, y, z); lm.setMatrixAt(j, _m4); }); fitBounds(lm); world.add(lm);
   // pavement along the road, neon edge strips, arches, boards
   const paveTex = sRGB(canvasTex(128, (g, s) => { g.fillStyle = '#5d606a'; g.fillRect(0, 0, s, s); g.strokeStyle = '#4a4d56'; g.lineWidth = 3; for (let k = 0; k <= 4; k++) { g.beginPath(); g.moveTo(0, k * 32); g.lineTo(s, k * 32); g.stroke(); g.beginPath(); g.moveTo(k * 32, 0); g.lineTo(k * 32, s); g.stroke(); } }));
   const pave = new THREE.MeshStandardMaterial({ map: paveTex, roughness: .9 });
@@ -1314,9 +1324,49 @@ function buildCity(rr) {
     W.fly.push({ g, r: 40 + rr() * 200, h: 18 + rr() * 50, sp: (.04 + rr() * .1) * (k % 2 ? 1 : -1), ph: rr() * 6.28 });
   }
 }
+// combine many small static meshes into one per material: same picture, far fewer draw calls
+function geoFor(mesh, toLocal) {
+  let g = mesh.geometry.clone();
+  for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+  if (!g.attributes.normal) g.computeVertexNormals();
+  if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+  mesh.updateWorldMatrix(true, false);
+  g.applyMatrix4(toLocal ? toLocal.clone().multiply(mesh.matrixWorld) : mesh.matrixWorld);
+  return g;
+}
+function bakeMeshes(root, list, toLocal) {
+  const byMat = new Map();
+  for (const m of list) { if (!byMat.has(m.material)) byMat.set(m.material, []); byMat.get(m.material).push(m); }
+  for (const [mat, ms] of byMat) {
+    if (ms.length < 2) continue;
+    const g = mergeGeos(ms.map(m => geoFor(m, toLocal)));
+    const out = new THREE.Mesh(g, mat);
+    out.castShadow = ms.some(m => m.castShadow); out.receiveShadow = ms.some(m => m.receiveShadow); out.renderOrder = ms[0].renderOrder;
+    root.add(out);
+    for (const m of ms) m.parent.remove(m);
+  }
+}
+function bakeStatic(root) {
+  const keep = new Set();
+  for (const o of W.obstacles) { if (o.g) keep.add(o.g); if (o.m) keep.add(o.m); }
+  for (const f of W.fly) keep.add(f.g);
+  for (const l of W.lights) keep.add(l);
+  const list = [];
+  root.updateMatrixWorld(true);
+  root.traverse(o => {
+    if (!o.isMesh || o.isInstancedMesh || !o.visible) return;
+    for (let p = o; p && p !== root; p = p.parent) if (keep.has(p)) return;
+    if (o.material.map && o.material.map.offset && W.padMats.includes(o.material)) return;
+    if (o.geometry.attributes.color && o.material.vertexColors) return;
+    if (o.userData.keep || o.geometry.attributes.position.count > 60000) return;
+    list.push(o);
+  });
+  bakeMeshes(root, list, null);
+}
 function buildWorld(id) {
   while (world.children.length) { const o = world.children.pop(); o.traverse(c => { if (c.geometry) c.geometry.dispose(); }); }
   for (const k of ['coins', 'movers', 'padMats', 'obstacles', 'ice', 'ramps', 'pads', 'lights', 'fly', 'crowds']) W[k] = [];
+  W.coinIM = W.gemIM = null;
   W.blink = null;
   TR = TRACKS[id];
   computeTrack(TR);
@@ -1329,7 +1379,7 @@ function buildWorld(id) {
   scene.fog.color.setHex(th.fog || 0x03040a); scene.background.setHex(th.fog || 0x03040a);
 
   // ground with colour variation: dark crater floors, bright rims, flattened along the road
-  const gg = new THREE.PlaneGeometry(640, 640, 220, 220); gg.rotateX(-Math.PI / 2);
+  const seg = TR.theme === 'city' ? 150 : 220, gg = new THREE.PlaneGeometry(640, 640, seg, seg); gg.rotateX(-Math.PI / 2);
   const p = gg.attributes.position, col = new Float32Array(p.count * 3), base = new THREE.Color(th.ground);
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i), d = coarseDist(x, z), h = terrainY(x, z, d, CN_I);
@@ -1374,7 +1424,7 @@ function buildWorld(id) {
     const im = new THREE.InstancedMesh(new THREE.BoxGeometry(.7, 1.05, 1.85), MAT.tyre, stacks.length);
     const m4 = new THREE.Matrix4(), c = new THREE.Color(), q = new THREE.Quaternion(), e = new THREE.Euler();
     stacks.forEach((v, j) => { m4.compose(V3(v.x, v.y + .52, v.z), q.setFromEuler(e.set(0, v.h, 0)), V3(1, 1, 1)); im.setMatrixAt(j, m4); im.setColorAt(j, c.setHex(j % 2 ? 0xd8dbe0 : 0xc9232b)); });
-    im.castShadow = im.receiveShadow = true; world.add(im);
+    fitBounds(im); im.castShadow = im.receiveShadow = true; world.add(im);
   }
   for (const [a, b] of TR.walls) { rockWall(world, 1, a, b); rockWall(world, -1, a, b); }
 
@@ -1445,11 +1495,7 @@ function buildWorld(id) {
     if (TR.lamps) { const pv = onTrack(i, s * (ROAD_W / 2 - .3)); part(new THREE.PlaneGeometry(10, 10), MAT.pool, world, [pv.x, pv.y + .08, pv.z], null, [-Math.PI / 2, 0, 0]).renderOrder = 2; }
   }
   // coins: rows on the racing line, arcs in the air over every ramp, blue crystals worth 5 on hilltops
-  const cgeo = new THREE.CylinderGeometry(.36, .36, .08, 20), ggeo = new THREE.OctahedronGeometry(.5, 0);
-  const coin = (v, y, val) => {
-    const m = val > 1 ? part(ggeo, MAT.gem, world, [v.x, y, v.z], [1, 1.35, 1]) : part(cgeo, MAT.coin, world, [v.x, y, v.z], null, [Math.PI / 2, 0, 0]);
-    W.coins.push({ m, x: v.x, y, z: v.z, val, taken: false });
-  };
+  const coin = (v, y, val) => W.coins.push({ x: v.x, y, z: v.z, val, taken: false });
   for (let i = 24; i < N - 10; i += 38) for (let k = 0; k < 4; k++) {
     const lat = Math.sin(i * .37) * (ROAD_W / 2 - 2), v = onTrack(i + k * 4, lat);
     coin(v, v.y + 1, 1);
@@ -1459,6 +1505,12 @@ function buildWorld(id) {
     coin(v, TY[R.i] + R.h + .8 + Math.sin(u * Math.PI) * R.h * .7, 1);
   }
   for (const [c, hh] of TR.hills || []) if (hh >= 3) { const v = onTrack(c, 0); coin(v, v.y + 1.2, 5); }
+  const nc = W.coins.filter(c => c.val === 1).length, ng = W.coins.length - nc;
+  W.coinIM = new THREE.InstancedMesh(new THREE.CylinderGeometry(.36, .36, .08, 16), MAT.coin, Math.max(1, nc));
+  W.gemIM = new THREE.InstancedMesh(new THREE.OctahedronGeometry(.5, 0), MAT.gem, Math.max(1, ng));
+  let ci = 0, gi = 0; for (const c of W.coins) { c.im = c.val > 1 ? W.gemIM : W.coinIM; c.j = c.val > 1 ? gi++ : ci++; }
+  for (const im of [W.coinIM, W.gemIM]) { im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); im.castShadow = false; world.add(im); }
+  placeCoins(0); fitBounds(W.coinIM); fitBounds(W.gemIM);
   // bases, rocket, scattered rocks
   raceDressing(rr);
   if (TR.theme === 'city') buildCity(rr);
@@ -1473,7 +1525,7 @@ function buildWorld(id) {
     rk.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
   }
   const dg = new THREE.DodecahedronGeometry(1, 0);
-  for (let n = 0; n < 260; n++) {
+  for (let n = 0; n < (TR.theme === 'city' ? 0 : 260); n++) {
     const a = rr() * 6.28, d = 6 + rr() * 170, x = Math.cos(a) * d, z = Math.sin(a) * d, cd = coarseDist(x, z);
     if (cd < ROAD_W / 2 + 4) continue;
     const s = .15 + rr() * (cd > 30 ? 1.5 : .5);
@@ -1482,6 +1534,7 @@ function buildWorld(id) {
   }
   W.earth.position.set(...th.earth); W.glow.position.copy(W.earth.position);
   W.sunSprite.visible = !th.head;
+  bakeStatic(world);
   skid.reset();
   scene.traverse(o => { if (o.isMesh && o.material && o.material.isMeshStandardMaterial && o.material.envMapIntensity !== undefined) o.material.envMapIntensity = THEMES[TR.theme].head ? .25 : .55; });
 }
@@ -1522,6 +1575,13 @@ const skid = (() => {
 
 /* ================= the kart, Зелчо and his wardrobe ================= */
 const K = buildKart(); scene.add(K.root); K.root.rotation.order = 'YXZ';
+(() => {
+  // everything on the kart body that never moves on its own becomes one mesh per material
+  const skip = new Set([K.swSpin]); K.wheels.forEach(w => { skip.add(w.steer); skip.add(w.hover); });
+  const list = []; K.root.updateMatrixWorld(true);
+  K.body.traverse(o => { if (!o.isMesh) return; for (let p = o; p && p !== K.body; p = p.parent) if (skip.has(p)) return; list.push(o); });
+  bakeMeshes(K.body, list, new THREE.Matrix4().copy(K.body.matrixWorld).invert());
+})();
 const blob = part(new THREE.PlaneGeometry(2.6, 3.6), new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), scene, null, null, [-Math.PI / 2, 0, 0]); blob.visible = false;
 drawDecals();
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { drawDecals(); if (TR) drawSign('ЛУННА ЛИГА · ' + TR.name.toUpperCase()); });
@@ -1625,39 +1685,52 @@ let resScale = 1, shadowLvl = 2;
 function setShadows(l) {
   if (l === shadowLvl) return; shadowLvl = l;
   sun.castShadow = l > 0; blob.visible = l === 0;
-  if (l > 0) { const n = l === 2 ? 2048 : 1024; sun.shadow.mapSize.set(n, n); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+  if (l > 0) { const n = l === 2 ? 2048 : 1024; sun.shadow.mapSize.set(n, n); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } renderer.shadowMap.type = l === 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap; }
   scene.traverse(o => { if (o.material && o.material.isMaterial) o.material.needsUpdate = true; });
 }
 function applyQuality() {
   const q = save.settings.quality;
-  if (q === 'low') { resScale = .6; setShadows(0); } else if (q === 'med') { resScale = .8; setShadows(1); } else if (q === 'high') { resScale = 1; setShadows(2); } else { resScale = Math.min(1, resScale); setShadows(1); }
+  if (q === 'low') { resScale = .6; setShadows(0); } else if (q === 'med') { resScale = .8; setShadows(1); } else if (q === 'high') { resScale = 1; setShadows(2); } else { resScale = Math.min(.85, resScale); setShadows(1); }
   $('fpsTile').hidden = !save.settings.fps;
   resize();
 }
-function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return; renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1) * resScale); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return; renderer.setPixelRatio(Math.min(save.settings.quality === 'high' ? 2 : 1.5, window.devicePixelRatio || 1) * resScale); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 new ResizeObserver(resize).observe($('stage')); resize();
 
 /* ================= particles (soft sprites) ================= */
 const PART = [];
-for (let i = 0; i < 180; i++) {
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, transparent: true, depthWrite: false }));
-  s.visible = false; scene.add(s); PART.push({ s, life: 0, max: 1, v: V3(0, 0, 0), size: .1, grow: 1, op: 1, lift: 0 });
-}
-let pNext = 0;
+const PSYS = [false, true].map(add => {
+  const n = 200, g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('pcolor', new THREE.BufferAttribute(new Float32Array(n * 4), 4).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('psize', new THREE.BufferAttribute(new Float32Array(n), 1).setUsage(THREE.DynamicDrawUsage));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { map: { value: softTex }, scale: { value: 500 } },
+    vertexShader: 'attribute vec4 pcolor; attribute float psize; uniform float scale; varying vec4 vC; void main() { vC = pcolor; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = min(psize * scale / max(.1, -mv.z), 90.0); gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'uniform sampler2D map; varying vec4 vC; void main() { float a = texture2D(map, gl_PointCoord).a * vC.a; if (a < .01) discard; gl_FragColor = vec4(vC.rgb, a); }',
+    transparent: true, depthWrite: false, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending
+  });
+  const pts = new THREE.Points(g, mat); pts.frustumCulled = false; pts.renderOrder = 3; scene.add(pts);
+  const items = []; for (let i = 0; i < n; i++) items.push({ life: 0, max: 1, p: V3(0, 0, -9999), v: V3(0, 0, 0), size: .1, grow: 1, op: 1, lift: 0, c: new THREE.Color() });
+  return { pts, g, items, next: 0 };
+});
 function emit(pos, vx, vy, vz, life, size, grow, color, add, op, lift) {
-  const p = PART[pNext]; pNext = (pNext + 1) % PART.length;
-  p.s.position.copy(pos); p.v.set(vx, vy, vz); p.life = p.max = life; p.size = size; p.grow = grow; p.op = op; p.lift = lift;
-  p.s.material.color.setHex(color); p.s.material.blending = add ? THREE.AdditiveBlending : THREE.NormalBlending;
-  p.s.visible = true;
+  const sys = PSYS[add ? 1 : 0], p = sys.items[sys.next]; sys.next = (sys.next + 1) % sys.items.length;
+  p.p.copy(pos); p.v.set(vx, vy, vz); p.life = p.max = life; p.size = size; p.grow = grow; p.op = op; p.lift = lift; p.c.setHex(color);
 }
 function updateParticles(dt) {
-  for (const p of PART) {
-    if (!p.s.visible) continue;
-    p.life -= dt; if (p.life <= 0) { p.s.visible = false; continue; }
-    p.v.y += p.lift * dt; p.s.position.addScaledVector(p.v, dt);
-    const k = p.life / p.max;
-    p.s.scale.setScalar(p.size * (1 + p.grow * (1 - k)));
-    p.s.material.opacity = p.op * k;
+  const h = canvas.clientHeight || 600;
+  for (const sys of PSYS) {
+    const P3 = sys.g.attributes.position.array, C4 = sys.g.attributes.pcolor.array, S1 = sys.g.attributes.psize.array;
+    sys.pts.material.uniforms.scale.value = h * renderer.getPixelRatio() / (2 * Math.tan(camera.fov * Math.PI / 360));
+    sys.items.forEach((p, i) => {
+      if (p.life > 0) { p.life -= dt; p.v.y += p.lift * dt; p.p.addScaledVector(p.v, dt); }
+      const k = Math.max(0, p.life / p.max);
+      P3[i * 3] = p.p.x; P3[i * 3 + 1] = p.p.y; P3[i * 3 + 2] = p.p.z;
+      C4[i * 4] = p.c.r; C4[i * 4 + 1] = p.c.g; C4[i * 4 + 2] = p.c.b; C4[i * 4 + 3] = p.life > 0 ? p.op * k : 0;
+      S1[i] = p.life > 0 ? p.size * (1 + p.grow * (1 - k)) : 0;
+    });
+    sys.g.attributes.position.needsUpdate = sys.g.attributes.pcolor.needsUpdate = sys.g.attributes.psize.needsUpdate = true;
   }
 }
 
@@ -1784,7 +1857,7 @@ function resetRace() {
   placeAt(N - 26); P.x += TL[N - 26].x * -2.3; P.z += TL[N - 26].z * -2.3; P.prog = -26; P.rank = 4;
   P.cp = false; P.lap = 1; P.laps = []; camHead = P.head; raceCoins = 0; P.hits = 0; P.ultra = 0; P.jumps = 0; P.nitro = 0; P.nitroOn = false;
   resetRivals();
-  for (const c of W.coins) { c.taken = false; c.m.visible = true; }
+  for (const c of W.coins) c.taken = false;
   for (const o of W.obstacles) if (o.kind === 'cone' || o.kind === 'barrel') { const v = o.home || (o.home = { x: o.x, z: o.z }); o.x = v.x; o.z = v.z; o.vx = o.vz = 0; o.knocked = 0; o.g.position.set(v.x, o.g.position.y, v.z); o.g.rotation.set(0, 0, 0); }
   skid.reset();
 }
@@ -1940,8 +2013,8 @@ function physics(dt, t, live) {
   // boost pads, coins
   if (grounded) for (const b of W.pads) if ((P.x - b.x) ** 2 + (P.z - b.z) ** 2 < 7 && P.boost < .7) { P.boost = 1.1; P.boostKind = 4; P.boostPow = 2.2; blip(520, .12); }
   for (const c of W.coins) if (!c.taken && (P.x - c.x) ** 2 + (P.z - c.z) ** 2 < (c.val > 1 ? 4 : 2.8) && Math.abs(P.y + .7 - c.y) < 1.8) {
-    c.taken = true; c.m.visible = false; raceCoins += c.val; blip(c.val > 1 ? 1760 : 1320, c.val > 1 ? .2 : .08, 'triangle'); if (c.val > 1) { P.nitro = Math.min(100, P.nitro + 15); msg('Кристал! +5 монети, +15 буст', .8, true); }
-    for (let k = 0; k < 6; k++) emit(c.m.position, (Math.random() - .5) * 3, 1 + Math.random() * 2, (Math.random() - .5) * 3, .4, .12, .5, 0xffd34f, true, 1, -4);
+    c.taken = true; raceCoins += c.val; blip(c.val > 1 ? 1760 : 1320, c.val > 1 ? .2 : .08, 'triangle'); if (c.val > 1) { P.nitro = Math.min(100, P.nitro + 15); msg('Кристал! +5 монети, +15 буст', .8, true); }
+    for (let k = 0; k < 6; k++) emit(tmp.set(c.x, c.y, c.z), (Math.random() - .5) * 3, 1 + Math.random() * 2, (Math.random() - .5) * 3, .4, .12, .5, 0xffd34f, true, 1, -4);
   }
 
   // collisions: two circles along the kart against obstacles, then walls
@@ -2009,14 +2082,27 @@ function physics(dt, t, live) {
   P.prevF = f;
   P.onIce = onIce;
 }
+let crowdTick = 0;
+const _cq = new THREE.Quaternion(), _ce = new THREE.Euler(), _zero = new THREE.Vector3(0, 0, 0), _one = new THREE.Vector3(1, 1, 1), _gem = new THREE.Vector3(1, 1.35, 1);
+function placeCoins(t) {
+  if (!W.coinIM) return;
+  for (const c of W.coins) {
+    if (c.val > 1) _ce.set(0, t * 2, 0); else _ce.set(Math.PI / 2, 0, t * 3);
+    _m4.compose(_v.set(c.x, c.y + Math.sin(t * 2 + c.x) * .1, c.z), _cq.setFromEuler(_ce), c.taken ? _zero : c.val > 1 ? _gem : _one);
+    c.im.setMatrixAt(c.j, _m4);
+  }
+  W.coinIM.instanceMatrix.needsUpdate = W.gemIM.instanceMatrix.needsUpdate = true;
+}
 function moveWorld(dt, t) {
   for (const f of W.fly || []) { const a = f.ph + t * f.sp; f.g.position.set(Math.cos(a) * f.r, f.h, Math.sin(a) * f.r); f.g.rotation.y = -a + (f.sp > 0 ? Math.PI / 2 : -Math.PI / 2) + Math.PI / 2; }
   // crowds near the camera cheer, harder when a kart is close
+  crowdTick++;
   for (const cr of W.crowds || []) {
-    cr.parent.getWorldPosition(_v); const cx = cr.data.length ? cr.data[0].x : 0;
-    const px = cr.parent === world ? cr.data[(cr.data.length / 2) | 0].x : _v.x, pz = cr.parent === world ? cr.data[(cr.data.length / 2) | 0].z : _v.z;
-    const dc = Math.hypot(camera.position.x - px, camera.position.z - pz);
-    if (dc > 140 || calm.matches) continue;
+    if (cr.px == null) { cr.parent.updateMatrixWorld(true); _v.copy(cr.body.geometry.boundingSphere.center).applyMatrix4(cr.parent.matrixWorld); cr.px = _v.x; cr.pz = _v.z; }
+    const px = cr.px, pz = cr.pz, dc = Math.hypot(camera.position.x - px, camera.position.z - pz);
+    // far crowds are not drawn at all; near ones move at 20 updates a second, in turns
+    const show = dc < 170; cr.body.visible = cr.head.visible = cr.arms.visible = show;
+    if (!show || dc > 110 || calm.matches || (crowdTick + cr.tick) % 3) continue;
     let near = Math.hypot(P.x - px, P.z - pz); for (const r of RIV) near = Math.min(near, Math.hypot(r.x - px, r.z - pz));
     cr.heat += ((near < 45 ? 1 : .15) - cr.heat) * Math.min(1, dt * 3);
     poseCrowd(cr, t, cr.heat);
@@ -2037,7 +2123,7 @@ function moveWorld(dt, t) {
     else o.g.rotation.y += s * dt * .3;
     if (s < .05) o.knocked = 0;
   }
-  for (const c of W.coins) if (!c.taken) { if (c.val > 1) c.m.rotation.y = t * 2; else c.m.rotation.z = t * 3; c.m.position.y = c.y + Math.sin(t * 2 + c.x) * .1; }
+  placeCoins(t);
 }
 
 /* ================= visuals and camera ================= */
@@ -2537,7 +2623,7 @@ function update(dt) {
   else if (state === 'count') rivalsStep(dt, false);
   if (msgT > 0) { msgT -= dt; if (msgT <= 0) $('msg').textContent = ''; }
 }
-let acc = 0, fpsN = 0, fpsT = 0, goodSecs = 0;
+let acc = 0, fpsN = 0, fpsT = 0, goodSecs = 0, qCool = 0;
 function frame(now) {
   const real = Math.min(.1, (now - last) / 1000); last = now;
   // the simulation always advances in 1/60 s steps, so a slow frame never slows the game down
@@ -2554,8 +2640,9 @@ function frame(now) {
     const fps = fpsN / fpsT; fpsN = 0; fpsT = 0;
     $('hFps').textContent = Math.round(fps);
     if (save.settings.quality === 'auto' && !document.hidden) {
-      if (fps < 48) { goodSecs = 0; if (resScale > .55) { resScale = Math.max(.5, resScale - (fps < 30 ? .2 : .1)); resize(); } else setShadows(0); }
-      else if (fps > 57) { if (++goodSecs >= 5 && resScale < 1) { resScale = Math.min(1, resScale + .1); resize(); goodSecs = 0; } }
+      qCool--;
+      if (fps < 45 && qCool <= 0) { goodSecs = 0; if (resScale > .55) { resScale = Math.max(.5, resScale - .15); resize(); qCool = 3; } }
+      else if (fps > 58) { if (++goodSecs >= 6 && resScale < .85 && qCool <= 0) { resScale = Math.min(.85, resScale + .1); resize(); goodSecs = 0; qCool = 3; } }
       else goodSecs = 0;
     }
   }
@@ -2563,13 +2650,21 @@ function frame(now) {
 }
 save.track = 'city'; buildWorld('city');
 applyLook(); buildRivals(); resetRace(); applyQuality(); applyTouch(); toMenu();
-if (location.hash === '#debug') window.__td = { P, TP, TT, N, keys: kb, save, W, TY, RIV, get state() { return state; }, get coins() { return raceCoins; }, set snap(v) { camSnap = v; }, step(sec, fn) { for (let k = 0; k < sec * 60; k++) { if (fn) fn(); update(1 / 60); } } };
+if (location.hash === '#debug') window.__td = { P, TP, TT, N, keys: kb, save, W, TY, RIV, renderer, scene, camera, perf: () => { const t0 = performance.now(); for (let k = 0; k < 20; k++) { update(1 / 60); visuals(1 / 60, clock); renderer.render(scene, camera); } renderer.getContext().finish(); return { ms: (performance.now() - t0) / 20, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, progs: renderer.info.programs.length }; }, get state() { return state; }, get coins() { return raceCoins; }, set snap(v) { camSnap = v; }, step(sec, fn) { for (let k = 0; k < sec * 60; k++) { if (fn) fn(); update(1 / 60); } } };
 requestAnimationFrame(frame);
 setTimeout(() => {
   driver = buildDriver(K); costume = buildCostumes(driver); applyCostume();
   scene.traverse(o => { if (o.isMesh && o.material && o.material.isMeshStandardMaterial) o.material.envMapIntensity = THEMES[TR.theme].head ? .25 : .55; });
+  prewarm();
   $('go').disabled = false; $('go').textContent = 'Старт';
 }, 80);
+function prewarm() {
+  // show every hidden thing for one compile, then put it back
+  const hidden = []; scene.traverse(o => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+  const sv = sun.castShadow; sun.castShadow = true;
+  try { renderer.compile(scene, camera); } catch (e) {}
+  sun.castShadow = sv; for (const o of hidden) o.visible = false;
+}
 })();
 </script>
 

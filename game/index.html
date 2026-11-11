@@ -249,6 +249,12 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
           <label class="chip"><input type="radio" name="q" id="q-med" value="med"><span>Средно</span></label>
           <label class="chip"><input type="radio" name="q" id="q-high" value="high"><span>Високо</span></label>
         </div></div>
+      <div><p class="slot">Съперници</p>
+        <div class="chips">
+          <label class="chip"><input type="radio" name="rv" id="rv-easy" value="easy"><span>Лесни</span></label>
+          <label class="chip"><input type="radio" name="rv" id="rv-normal" value="normal"><span>Нормални</span></label>
+          <label class="chip"><input type="radio" name="rv" id="rv-hard" value="hard"><span>Трудни</span></label>
+        </div></div>
       <div><p class="slot">Камера</p>
         <div class="chips">
           <label class="chip"><input type="radio" name="cam" id="cam-chase" value="chase"><span>Зад количката</span></label>
@@ -287,6 +293,7 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
       <p class="eyebrow" id="eTrack">Финал</p>
       <h1>Три обиколки</h1>
       <div class="total" id="eTotal">0:00.00</div>
+      <dl class="laps" id="eStand"></dl>
       <dl class="laps" id="eLaps"></dl>
       <p class="eyebrow" id="eMedal"></p>
       <dl class="laps" id="eRew"></dl>
@@ -313,7 +320,7 @@ const SAVE_KEY = 'luna-liga-save';
 const save = { coins: 60, owned: [], equip: { hat: null, eyes: null, body: null }, kartColor: '#c4161c', zcolor: '#3aa548', wheels: 'slick', num: 7, track: 'base', best: {}, muted: false, done: {}, settings: {} };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (s && typeof s === 'object') Object.assign(save, s, { equip: Object.assign({ hat: null, eyes: null, body: null }, s.equip || {}) }); } catch (e) {}
 const DEF_BINDS = { gas: ['KeyW', 'ArrowUp'], brake: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], hop: ['Space', 'ShiftLeft'], reset: ['KeyR'], cam: ['KeyC'], pause: ['KeyP', 'Escape'] };
-save.settings = Object.assign({ quality: 'auto', fps: true, cam: 'chase', device: 'keys', ts: 'arrows', tsAlways: false }, save.settings || {});
+save.settings = Object.assign({ quality: 'auto', fps: true, cam: 'chase', device: 'keys', ts: 'arrows', tsAlways: false, rivals: 'normal' }, save.settings || {});
 save.settings.binds = Object.assign({}, JSON.parse(JSON.stringify(DEF_BINDS)), save.settings.binds || {});
 save.settings.wheel = Object.assign({ steer: 0, gas: -1, gasRest: 0, brake: -1, brakeRest: 0, drift: -1, sens: 1, inv: false }, save.settings.wheel || {});
 save.done = save.done || {};
@@ -800,14 +807,14 @@ const TRACKS = {
     name: 'Лунна база', blurb: 'Широка писта около базата, гумени бариери в завоите, плочки за ускорение и голям скок.',
     theme: 'day', scale: 1.15, width: 11,
     ctrl: [[0, -62], [38, -60], [66, -36], [70, -4], [48, 14], [30, 30], [40, 58], [12, 76], [-24, 70], [-50, 46], [-66, 12], [-58, -26], [-34, -52]],
-    pads: [140, 470, 650], ramps: [[330, 1.25], [735, 2.1]], hills: [[215, 5, 55], [560, 7, 70], [440, 2.3, 13]], medal: [86, 98, 120], walls: [], rocks: [], barrels: [], cones: [], movers: [], ice: [],
+    pads: [140, 470, 650], ramps: [[330, 1.25], [735, 2.1]], hills: [[215, 5, 55], [560, 7, 70], [440, 2.3, 13]], medal: [88, 99, 122], walls: [], rocks: [], barrels: [], cones: [], movers: [], ice: [],
     bases: [[0, 4, 0, 2.2], [104, 30, 1.2, 1.6], [-100, -40, 2.4, 1.8], [30, -110, .4, 1.5]], rocket: [24, 4]
   },
   canyon: {
     name: 'Кратерен каньон', blurb: 'Тесни завои между скални стени. Камъни, бидони, конуси и търкалящи се скали.',
     theme: 'dusk', scale: 1.25, width: 9,
     ctrl: [[0, -50], [30, -55], [52, -40], [48, -15], [25, -8], [18, 12], [38, 30], [30, 55], [5, 62], [-15, 45], [-12, 22], [-35, 10], [-55, 25], [-62, 0], [-48, -28], [-25, -35]],
-    pads: [100, 520], ramps: [[610, 1.25], [50, 1.9]], hills: [[125, 4, 45], [372, 6, 42], [665, 5, 55], [272, 1.9, 11]], medal: [112, 128, 155], walls: [[175, 335], [415, 500]],
+    pads: [100, 520], ramps: [[610, 1.25], [50, 1.9]], hills: [[125, 4, 45], [372, 6, 42], [665, 5, 55], [272, 1.9, 11]], medal: [112, 126, 155], walls: [[175, 335], [415, 500]],
     pace: .25, rocks: [[232, 2.1, .95], [262, -2.4, 1.05], [298, 1.4, .8], [452, -1.9, .9], [478, 2.2, .85]],
     barrels: [[380, 0], [386, 2.6], [386, -2.6], [392, 0]],
     cones: [[700, 2.4], [712, -2.4], [724, 2.4], [736, -2.4], [748, 2.4]],
@@ -818,7 +825,7 @@ const TRACKS = {
     name: 'Тъмната страна', blurb: 'Нощна писта под фенери и с включени фарове. Лед в сенчестите кратери и конуси.',
     theme: 'night', scale: 1.1, width: 10,
     ctrl: [[0, -70], [45, -62], [70, -30], [60, 5], [75, 35], [50, 65], [10, 60], [-5, 30], [-30, 40], [-60, 55], [-75, 20], [-55, -15], [-60, -45], [-30, -65]],
-    pads: [200, 620], ramps: [[420, 1.25], [585, 2.1]], hills: [[160, 6, 55], [352, 3, 14], [485, 8, 75], [690, 4.5, 40]], medal: [96, 110, 135], walls: [], rocks: [[330, -2.4, .8]], barrels: [[560, 2.6], [566, -2.6]],
+    pads: [200, 620], ramps: [[420, 1.25], [585, 2.1]], hills: [[160, 6, 55], [352, 3, 14], [485, 8, 75], [690, 4.5, 40]], medal: [105, 118, 145], walls: [], rocks: [[330, -2.4, .8]], barrels: [[560, 2.6], [566, -2.6]],
     cones: [[250, 3], [262, -3], [274, 3], [700, -3], [712, 3]], movers: [],
     ice: [[120, 0, 3.4], [300, 2, 2.8], [515, -2, 3.2], [740, 1, 3]],
     bases: [[8, 0, 0, 2], [110, -10, 2, 1.7], [-110, 10, 4, 1.6]], rocket: [20, -18], lamps: true
@@ -827,7 +834,7 @@ const TRACKS = {
     name: 'Космически град', blurb: 'Нощно състезание по улиците между небостъргачи, неонови арки, мостове и летящи коли.',
     theme: 'city', scale: 1.1, width: 12,
     ctrl: [[0, -70], [50, -70], [75, -45], [75, 0], [50, 25], [20, 25], [10, 50], [35, 70], [10, 85], [-30, 75], [-45, 45], [-25, 20], [-50, 0], [-75, -25], [-55, -60]],
-    pads: [90, 400, 690], ramps: [[150, 1.5], [505, 2.1]], hills: [[300, 6, 38], [610, 5, 34], [440, 2.2, 12]], medal: [100, 114, 138], walls: [],
+    pads: [90, 400, 690], ramps: [[150, 1.5], [505, 2.1]], hills: [[300, 6, 38], [610, 5, 34], [440, 2.2, 12]], medal: [114, 128, 158], walls: [],
     rocks: [], barrels: [[250, 3], [256, -3], [560, 0]], cones: [[350, 3.2], [362, -3.2], [374, 3.2], [730, -3.2], [742, 3.2]], movers: [], ice: [],
     bases: [], rocket: [0, 0], lamps: true
   }
@@ -1295,8 +1302,8 @@ function buildWorld(id) {
     coin(v, v.y + 1, 1);
   }
   for (const R of W.ramps) for (let k = 0; k < 5; k++) {
-    const a = R.top + 3 + k * 4.5, u = k / 4, v = V3(R.x + R.t.x * a, 0, R.z + R.t.z * a);
-    coin(v, TY[R.i] + R.h + 1 + Math.sin(u * Math.PI) * R.h * 1.3, 1);
+    const a = R.top + 2.5 + k * 3.5, u = k / 4, v = V3(R.x + R.t.x * a, 0, R.z + R.t.z * a);
+    coin(v, TY[R.i] + R.h + .8 + Math.sin(u * Math.PI) * R.h * .7, 1);
   }
   for (const [c, hh] of TR.hills || []) if (hh >= 3) { const v = onTrack(c, 0); coin(v, v.y + 1.2, 5); }
   // bases, rocket, scattered rocks
@@ -1604,9 +1611,9 @@ function readPad() {
 // longitudinal: engine curve, rolling resistance and air drag; lateral: tyres can only
 // correct sideways speed up to their grip limit, so pushing too hard makes the kart slide
 const TIRE = {
-  slick: { power: 20, vmax: 31, mu: 1.0, muOff: .42, roll: .5, rollOff: 5, name: 'пистови слик' },
-  lunar: { power: 19, vmax: 28.5, mu: .86, muOff: .8, roll: .7, rollOff: 1.4, name: 'лунни мрежести' },
-  hover: { power: 21, vmax: 33.5, mu: .58, muOff: .52, roll: .3, rollOff: .5, name: 'ховър' }
+  slick: { power: 16, vmax: 24.5, mu: 1.0, muOff: .42, roll: .5, rollOff: 5, name: 'пистови слик' },
+  lunar: { power: 15.2, vmax: 22.5, mu: .86, muOff: .8, roll: .7, rollOff: 1.4, name: 'лунни мрежести' },
+  hover: { power: 16.8, vmax: 26.5, mu: .58, muOff: .52, roll: .3, rollOff: .5, name: 'ховър' }
 };
 const GRIP = 40, WHEELBASE = 1.5;
 const P = {};
@@ -1728,7 +1735,7 @@ function physics(dt, t, live) {
     if (vf > vmax) F -= (vf - vmax) * 2;
     // the tyres can only pass so much force to the ground: flooring it on ice or dust spins the wheels,
     // and sliding sideways scrubs speed off
-    const tract = mu * 30 + 1.5;
+    const tract = mu * 24 + 1.5;
     P.spin = grounded && F > tract ? F - tract : 0; if (F > tract) F = tract;
     F -= Math.sign(vf) * Math.min(Math.abs(vl), 12) * .7;
     P.used = Math.min(1, Math.abs(F) / (mu * 34 + 1));
@@ -2036,6 +2043,10 @@ function showEnd() {
   $('eMedal').textContent = ['Златен медал', 'Сребърен медал', 'Бронзов медал', 'Без медал'][medal] + ' · злато под ' + fmt(md[0]) + ', сребро под ' + fmt(md[1]) + ', бронз под ' + fmt(md[2]);
   const dl = $('eLaps'); dl.textContent = '';
   P.laps.forEach((l, i) => { const dt = document.createElement('dt'); dt.textContent = 'Обиколка ' + (i + 1); const dd = document.createElement('dd'); dd.textContent = fmt(l); if (l === bl) dd.className = 'best'; dl.append(dt, dd); });
+  const ds = TRACK_LEN / N, el = endT - raceT0;
+  const stand = RIV.map(r => ({ name: r.name, t: r.finish != null ? r.finish : el + (LAPS * N - r.s) * ds / Math.max(r.v, 14), est: r.finish == null })).concat([{ name: 'Зелчо (ти)', t: total, me: true }]).sort((a, b) => a.t - b.t);
+  const sd = $('eStand'); sd.textContent = '';
+  stand.forEach((o, k) => { const dt = document.createElement('dt'); dt.textContent = (k + 1) + '. ' + o.name; const dd = document.createElement('dd'); dd.textContent = (o.est ? '≈ ' : '') + fmt(o.t); if (o.me) { dt.className = dd.className = 'best'; } sd.append(dt, dd); });
   const rw = $('eRew'); rw.textContent = '';
   for (const [label, v] of rows) { const dt = document.createElement('dt'); dt.textContent = label; const dd = document.createElement('dd'); dd.textContent = '◎ ' + v; rw.append(dt, dd); }
   $('eNote').textContent = 'Общо спечели ◎ ' + earned + '. Рекорд с ' + TIRE[save.wheels].name + ': ' + fmt(save.best[bestKey()]) + '.';
@@ -2047,6 +2058,7 @@ const KEYNAME = c => c.replace('Key', '').replace('Digit', '').replace('Arrow', 
 const ACTNAME = { gas: 'Газ', brake: 'Спирачка и назад', left: 'Наляво', right: 'Надясно', hop: 'Скок и дрифт', reset: 'Обратно на пистата', cam: 'Смяна на камерата', pause: 'Пауза' };
 function renderSettings() {
   const S = save.settings;
+  $('rv-' + (S.rivals || 'normal')).checked = true;
   $('ts-' + S.ts).checked = true; $('tsAlways').checked = !!S.tsAlways;
   $('q-' + S.quality).checked = true; $('cam-' + S.cam).checked = true; $('dev-' + S.device).checked = true; $('fpsOn').checked = S.fps;
   $('bindBox').hidden = S.device === 'wheel' ? false : false; $('wheelBox').hidden = S.device !== 'wheel';
@@ -2085,6 +2097,7 @@ document.querySelectorAll('input[name="q"]').forEach(i => i.addEventListener('ch
 document.querySelectorAll('input[name="cam"]').forEach(i => i.addEventListener('change', () => { save.settings.cam = i.value; persist(); }));
 document.querySelectorAll('input[name="dev"]').forEach(i => i.addEventListener('change', () => { save.settings.device = i.value; persist(); renderSettings(); }));
 document.querySelectorAll('input[name="ts"]').forEach(i => i.addEventListener('change', () => { save.settings.ts = i.value; persist(); applyTouch(); }));
+document.querySelectorAll('input[name="rv"]').forEach(i => i.addEventListener('change', () => { save.settings.rivals = i.value; persist(); }));
 $('tsAlways').addEventListener('change', e => { save.settings.tsAlways = e.target.checked; persist(); applyTouch(); });
 $('fpsOn').addEventListener('change', e => { save.settings.fps = e.target.checked; persist(); applyQuality(); });
 for (const k of ['steer', 'gas', 'brake', 'drift']) $('det-' + k).addEventListener('click', () => detect(k));
@@ -2171,25 +2184,44 @@ $('garageBtn').addEventListener('click', () => { state = 'garage'; $('menuCard')
 $('garageDone').addEventListener('click', () => { preview = null; applyCostume(); toMenu(); });
 
 /* ================= rivals ================= */
-// three karts that follow the road: they brake for the bends ahead, change lane around obstacles,
-// ride the hills and ramps, and bump the player on contact
+// three karts with names and habits. They follow a racing line (wide into a bend, tight at the apex),
+// brake early enough for every bend ahead, pass on the free side, dodge obstacles, take boost pads,
+// earn a mini turbo from long corners, and stay within reach of the player.
 const RIV = [];
+const RIVAL_DEF = [
+  { name: 'Комета', col: 0x2f7bff, helm: 0xf4f4f4, top: .94, corner: 1.02, acc: 1.0, aggr: .5, off: -.6 },
+  { name: 'Метеор', col: 0xf2c230, helm: 0x16171a, top: .98, corner: .97, acc: 1.08, aggr: 1, off: .6 },
+  { name: 'Нова', col: 0x8a4fd8, helm: 0xff7a1a, top: 1.04, corner: 1.04, acc: .96, aggr: .75, off: 0 }
+];
+const DIFF = { easy: .86, normal: .95, hard: 1.03 };
 function buildRivals() {
-  const cols = [0x2f7bff, 0xf2c230, 0x8a4fd8], helm = [0xf4f4f4, 0x16171a, 0xff7a1a];
-  for (let n = 0; n < 3; n++) {
-    const g = K.root.clone(true), paint = M.paint.clone(); paint.color.setHex(cols[n]);
+  K.wheels.forEach((w, n) => { w.steer.name = 'wsteer' + n; w.spin.name = 'wspin' + n; w.slick.name = 'wslick' + n; w.lunar.name = 'wlunar' + n; w.hover.name = 'whover' + n; });
+  RIVAL_DEF.forEach((d, n) => {
+    const g = K.root.clone(true), paint = M.paint.clone(); paint.color.setHex(d.col);
     const kill = [];
-    g.traverse(o => { if (o.isMesh) { if (o.material === M.paint) o.material = paint; else if (![M.tire, M.carbon, M.rim].includes(o.material)) kill.push(o); } else if (o.isLight || o.isSprite) kill.push(o); });
+    g.traverse(o => { if (o.isMesh) { if (o.material === M.paint) o.material = paint; else if (![M.tire, M.carbon, M.rim, M.frame, M.chrome, M.alu, M.rubber].includes(o.material)) kill.push(o); } else if (o.isLight || o.isSprite) kill.push(o); });
     kill.forEach(o => o.parent && o.parent.remove(o));
-    part(SPH, new THREE.MeshPhysicalMaterial({ color: helm[n], roughness: .2, clearcoat: 1 }), g, [0, .86, -.3], [.27, .27, .29]).castShadow = true;
-    part(SPH, new THREE.MeshStandardMaterial({ color: cols[n], roughness: .6 }), g, [0, .48, -.3], [.26, .3, .22]);
+    const wh = [0, 1, 2, 3].map(k => {
+      const st = g.getObjectByName('wsteer' + k), sp = g.getObjectByName('wspin' + k);
+      st.visible = true; g.getObjectByName('wslick' + k).visible = true; g.getObjectByName('wlunar' + k).visible = false;
+      const hv = g.getObjectByName('whover' + k); if (hv) hv.visible = false;
+      return { st, sp, front: k < 2 };
+    });
+    // a little driver in the team colours
+    part(SPH, new THREE.MeshPhysicalMaterial({ color: d.helm, roughness: .2, clearcoat: 1 }), g, [0, .86, -.3], [.27, .27, .29]).castShadow = true;
+    part(new THREE.TorusGeometry(.27, .03, 8, 32), new THREE.MeshStandardMaterial({ color: d.col, roughness: .4 }), g, [0, .86, -.3], [1, 1, 1.07], [0, Math.PI / 2, 0]);
+    part(SPH, new THREE.MeshStandardMaterial({ color: d.col, roughness: .6 }), g, [0, .48, -.3], [.26, .3, .22]).castShadow = true;
     part(SPH, new THREE.MeshPhysicalMaterial({ color: 0x0b0b0e, roughness: .05, clearcoat: 1 }), g, [0, .88, -.1], [.2, .1, .12]);
+    for (const s of [-1, 1]) part(new THREE.CapsuleGeometry(.05, .2, 4, 8), new THREE.MeshStandardMaterial({ color: d.col, roughness: .6 }), g, [s * .17, .55, -.05], null, [-1.1, 0, s * .3]);
     g.rotation.order = 'YXZ'; scene.add(g);
-    RIV.push({ g, s: 0, lat: 0, lane: 0, v: 0, y: 0, vy: 0, vmax: [26, 27.5, 29][n], grip: [19, 22, 25][n], acc: [9, 10, 11][n] });
-  }
+    RIV.push(Object.assign({ g, wh, spin: 0, s: 0, lat: 0, latV: 0, v: 0, y: 0, vy: 0, boost: 0, cornerT: 0, steerVis: 0, roll: 0, finish: null, n }, d));
+  });
 }
 function resetRivals() {
-  RIV.forEach((r, n) => { r.s = -8 - n * 6; r.lane = r.lat = n % 2 ? -2.3 : 2.3; r.v = 0; r.vy = 0; placeRival(r); r.y = r.gy; r.g.position.y = r.y; });
+  RIV.forEach((r, n) => {
+    r.s = -8 - n * 6; r.lat = n % 2 ? -2.3 : 2.3; r.latV = 0; r.v = 0; r.vy = 0; r.boost = 0; r.cornerT = 0; r.finish = null; r.steerVis = 0; r.roll = 0;
+    placeRival(r); r.y = r.gy; r.g.position.y = r.y;
+  });
 }
 function placeRival(r) {
   const fi = ((r.s % N) + N) % N, i = Math.floor(fi), j = (i + 1) % N, f = fi - i;
@@ -2197,37 +2229,117 @@ function placeRival(r) {
   r.x = TP[i].x + (TP[j].x - TP[i].x) * f + TL[i].x * r.lat; r.z = TP[i].z + (TP[j].z - TP[i].z) * f + TL[i].z * r.lat;
   const ra = rampAt(r.x, r.z);
   r.gy = TY[i] + (TY[j] - TY[i]) * f + (ra ? ra.h + .04 : 0);
-  r.g.position.set(r.x, r.y, r.z); r.g.rotation.y = headingAt(i); r.g.rotation.x = r.y > r.gy + .05 ? 0 : -Math.atan(SL[i] + (ra ? ra.slope : 0));
+  r.ra = ra;
+}
+// signed curvature at sample i (1/m): positive turns left, which is the +lat side
+function curvAt(i) {
+  const ds = TRACK_LEN / N, a = TT[((i - 4) % N + N) % N], b = TT[(i + 4) % N];
+  return -(a.x * b.z - a.z * b.x) / (8 * ds);
 }
 function rivalsStep(dt, live) {
-  const ds = TRACK_LEN / N;
+  const ds = TRACK_LEN / N, T = TIRE[save.wheels], diff = DIFF[save.settings.rivals] || 1;
+  const lim = ROAD_W / 2 - 1.3;
+  // everyone on the road, as track position and lateral offset, for passing and spacing
+  const field = RIV.map(r => ({ who: r, s: r.s, lat: r.lat, v: r.v }));
+  const pInfo = trackInfo(P.x, P.z, P.idx);
+  field.push({ who: P, s: P.prog + pInfo.along / ds, lat: pInfo.lat, v: Math.hypot(P.vx, P.vz) });
   let rank = 1;
   for (const r of RIV) {
-    const i = r.i, c = (a, b) => { const p = TT[(i + a) % N], q = TT[(i + b) % N]; return Math.abs(p.x * q.z - p.z * q.x) / ((b - a) * ds); };
-    const gk = r.grip * (TR.pace || .3);
-    const near = Math.sqrt(gk / Math.max(c(4, 20), .002)), far = Math.sqrt(gk / Math.max(c(26, 46), .002)) + 6;
-    const vt = live ? Math.min(r.vmax, near, far) : 0;
-    r.v += Math.max(-24 * dt, Math.min(vt - r.v, r.acc * dt * (1 - .6 * (r.v / r.vmax) ** 2)));
+    const i = r.i, done = r.finish != null, racing = live || (state !== 'count' && !done);
+    // --- speed: the slowest of top speed and every "brake now for that bend" limit ahead
+    const grip = 7.4 * r.corner * diff * diff * (TR.pace ? TR.pace / .3 : 1);
+    const gap = (P.prog - r.s) * ds; // > 0: the player is ahead
+    const band = gap > 40 ? Math.min(1.08, 1 + (gap - 40) * .0015) : gap < -45 ? Math.max(.9, 1 + (gap + 45) * .0015) : 1;
+    let vmax = T.vmax * .9 * r.top * diff;
+    if (r.boost > 0) vmax *= 1.25;
+    let vt = vmax;
+    for (let k = 2; k <= 80; k += 3) {
+      const kap = Math.abs(curvAt((i + k) % N)) + .0015;
+      const vc = Math.sqrt(grip / kap) * 1.12; // the racing line opens the bend up a little
+      vt = Math.min(vt, Math.sqrt(vc * vc + 2 * 11 * k * ds));
+    }
+    vt *= band; vmax *= band;
+    // --- traffic: slow behind someone we cannot pass, otherwise pick the free side
+    let laneWant = null;
+    for (const o of field) {
+      if (o.who === r) continue;
+      const ahead = (o.s - r.s) * ds;
+      if (ahead > 0 && ahead < 9 && Math.abs(o.lat - r.lat) < 2) {
+        const left = o.lat + 2.5, right = o.lat - 2.5;
+        const can = s => Math.abs(s) <= lim;
+        const side = can(left) && can(right) ? (Math.abs(left - r.lat) < Math.abs(right - r.lat) ? left : right) : can(left) ? left : can(right) ? right : null;
+        if (side != null && r.v > o.v - 1) laneWant = side;
+        else if (ahead < 5) vt = Math.min(vt, o.v + (ahead - 3));
+      }
+    }
+    // --- the racing line: outside before a bend, inside at the apex, and drift wide on the way out
+    let line = 0;
+    for (let k = 0; k <= 12; k += 3) line += curvAt((i + k) % N) * 26;
+    for (let k = 16; k <= 40; k += 4) line -= curvAt((i + k) % N) * 14;
+    let lane = Math.max(-lim, Math.min(lim, line * lim + r.off));
+    if (laneWant != null) lane = laneWant;
+    // boost pads ahead pull the kart over them
+    for (const b of W.pads) { const d = Math.hypot(b.x - r.x, b.z - r.z); if (d < 26 && d > 2 && laneWant == null) lane = lane * .3; }
+    // obstacles, moving rocks and knocked cones are steered round by their real position
+    for (const o of W.obstacles) {
+      const dx = o.x - TP[i].x, dz = o.z - TP[i].z, a = dx * TT[i].x + dz * TT[i].z;
+      if (a < -1 || a > 18 + r.v * .4) continue;
+      const ol = dx * TL[i].x + dz * TL[i].z, need = o.r + 1.5;
+      if (Math.abs(ol - lane) < need) { const up = ol + need, dn = ol - need; lane = Math.abs(up) <= lim && (Math.abs(up - r.lat) < Math.abs(dn - r.lat) || Math.abs(dn) > lim) ? up : dn; }
+    }
+    lane = Math.max(-lim, Math.min(lim, lane));
+    // --- move
+    if (!racing) vt = done ? Math.max(0, r.v - 6) : 0;
+    const accel = 11 * r.acc * diff * (r.boost > 0 ? 2 : 1) * Math.max(.15, 1 - (r.v / vmax) ** 2);
+    r.v += Math.max(-20 * dt, Math.min(vt - r.v, accel * dt));
     r.v = Math.max(0, r.v - 9 * SL[i] * dt);
-    // lane: hold the grid lane, swerve round anything in the way
-    let lane = r.lane;
-    for (const o of W.obstacles) { if (o.ti == null) continue; const ahead = ((o.ti - i) % N + N) % N; if (ahead < 30 && Math.abs(o.tl - r.lat) < 2.1) lane = o.tl > 0 ? o.tl - 2.9 : o.tl + 2.9; }
-    lane = Math.max(-(ROAD_W / 2 - 1.2), Math.min(ROAD_W / 2 - 1.2, lane));
-    r.lat += Math.max(-3.2 * dt, Math.min(3.2 * dt, lane - r.lat));
+    const latA = Math.max(-14, Math.min(14, (lane - r.lat) * 9 - r.latV * 5));
+    r.latV += latA * dt; r.lat += r.latV * dt;
+    if (Math.abs(r.lat) > lim + .4) { r.lat = Math.sign(r.lat) * (lim + .4); r.latV = 0; }
     r.s += r.v * dt / ds;
+    if (r.boost > 0) r.boost -= dt;
+    // boost pads and mini turbos
+    for (const b of W.pads) if ((b.x - r.x) ** 2 + (b.z - r.z) ** 2 < 7 && r.boost < .6) r.boost = 1.1;
+    const kNow = Math.abs(curvAt(i));
+    if (kNow > .035 && r.v > 12) { r.cornerT += dt; if (r.cornerT > 1 && r.cornerT - dt <= 1) r.charge = 1; }
+    else { if (r.cornerT > 1.1 && r.boost <= 0) r.boost = Math.min(1.1, .45 + r.cornerT * .25); r.cornerT = 0; }
+    // finish line
+    if (r.finish == null && r.s >= LAPS * N && (state === 'race' || state === 'done' || state === 'end')) r.finish = clock - raceT0;
     placeRival(r);
     if (r.y > r.gy + .02) { r.vy -= G * dt; r.y = Math.max(r.gy, r.y + r.vy * dt); }
     else { r.vy = Math.max(-8, Math.min(r.v * .45, (r.gy - r.y) / dt)); r.y = r.gy; }
-    r.g.position.y = r.y;
+    // looks: heading along the road plus the lateral motion, roll into bends, wheels turning
+    const turn = curvAt(i);
+    const yaw = headingAt(i) + Math.atan2(r.latV, Math.max(r.v, 1)) * .8 + (r.cornerT > .6 ? turn * 4 : 0);
+    r.steerVis += (Math.max(-.4, Math.min(.4, turn * 9 + r.latV * .05)) - r.steerVis) * Math.min(1, dt * 8);
+    r.roll += (-turn * r.v * .012 - r.roll) * Math.min(1, dt * 6);
+    r.g.position.set(r.x, r.y, r.z); r.g.rotation.y = yaw;
+    r.g.rotation.x = r.y > r.gy + .05 ? Math.max(-.2, -r.vy * .02) : -Math.atan(SL[i] + (r.ra ? r.ra.slope : 0));
+    r.g.rotation.z = Math.max(-.08, Math.min(.08, r.roll));
+    r.spin += r.v / .29 * dt;
+    for (const w of r.wh) { w.sp.rotation.x = r.spin; if (w.front) w.st.rotation.y = r.steerVis; }
+    // sparks from long corners and flames when boosting, only when close enough to see
+    const near = (r.x - camera.position.x) ** 2 + (r.z - camera.position.z) ** 2 < 1600;
+    if (near && !calm.matches) {
+      if (r.cornerT > .6 && Math.random() < .5) { r.g.localToWorld(tmp.set((Math.random() < .5 ? -1 : 1) * .8, .05, -1.05)); emit(tmp, (Math.random() - .5) * 2, 1 + Math.random() * 1.5, (Math.random() - .5) * 2, .25, .14, .3, r.cornerT > 1 ? 0x4fb8ff : 0xfff2c4, true, 1, -7); }
+      if (r.boost > 0 && Math.random() < .6) { r.g.localToWorld(tmp.set(.53, .35, -1.3)); emit(tmp, -Math.sin(yaw) * 3, .4, -Math.cos(yaw) * 3, .2, .3, 1.3, 0xff8a3d, true, .9, 0); }
+    }
     // contact with the player
     const dx = P.x - r.x, dz = P.z - r.z, d2 = dx * dx + dz * dz;
     if (d2 < 3.6 && Math.abs(P.y - r.y) < 1.2) {
       const d = Math.sqrt(d2) || .01, nx = dx / d, nz = dz / d, pen = 1.9 - d;
-      P.x += nx * pen * .7; P.z += nz * pen * .7; r.lat -= (nx * TL[i].x + nz * TL[i].z) * pen * .3;
+      P.x += nx * pen * .6; P.z += nz * pen * .6;
+      const sideHit = nx * TL[i].x + nz * TL[i].z;
+      r.lat -= sideHit * pen * .4; r.latV -= sideHit * 2;
       const vn = (P.vx - TT[i].x * r.v) * nx + (P.vz - TT[i].z * r.v) * nz;
       if (vn < 0) { P.vx -= vn * nx * .8; P.vz -= vn * nz * .8; r.v = Math.max(0, r.v + vn * .25 * (TT[i].x * nx + TT[i].z * nz) * -1); if (-vn > 3) { blip(110, .1, 'sawtooth'); shake = Math.min(1, shake + .25); } }
     }
     if (r.s > P.prog) rank++;
+  }
+  // rivals keep their distance from each other
+  for (let a = 0; a < RIV.length; a++) for (let b = a + 1; b < RIV.length; b++) {
+    const A = RIV[a], B = RIV[b], along = (A.s - B.s) * ds, dl = A.lat - B.lat;
+    if (Math.abs(along) < 2.2 && Math.abs(dl) < 1.7) { const push = (1.7 - Math.abs(dl)) * .5 * (dl >= 0 ? 1 : -1); A.lat += push; B.lat -= push; A.latV += push * 2; B.latV -= push * 2; }
   }
   if (live) P.rank = rank;
 }
@@ -2248,6 +2360,7 @@ function update(dt) {
   if (state === 'race') physics(dt, t, true);
   else if (state === 'done' || state === 'end') physics(dt, t, false);
   if (state === 'race' || state === 'done' || state === 'end') rivalsStep(dt, state === 'race');
+  else if (state === 'count') rivalsStep(dt, false);
   if (msgT > 0) { msgT -= dt; if (msgT <= 0) $('msg').textContent = ''; }
 }
 let acc = 0, fpsN = 0, fpsT = 0, goodSecs = 0;

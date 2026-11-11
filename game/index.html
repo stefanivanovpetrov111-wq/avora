@@ -815,7 +815,7 @@ const TRACKS = {
     name: 'Космически град', blurb: 'Дълга нощна писта по улиците между небостъргачите: мостове, рампи, шикани и пълни трибуни.',
     theme: 'city', scale: 1, width: 13,
     ctrl: [[0, -150], [60, -150], [110, -140], [150, -110], [160, -60], [130, -30], [90, -35], [60, -10], [70, 30], [120, 40], [160, 70], [150, 120], [100, 150], [40, 140], [10, 110], [-20, 130], [-70, 150], [-120, 130], [-150, 90], [-140, 40], [-100, 20], [-110, -30], [-150, -60], [-140, -110], [-90, -145], [-40, -150]],
-    pads: [150, 620, 1050], ramps: [[300, 1.6], [880, 2.2]], hills: [[480, 6, 60], [760, 4, 30], [1180, 7, 70], [1000, 2.4, 18]], medal: [200, 225, 280], walls: [],
+    pads: [150, 620, 1050], ramps: [[300, 1.6]], fire: [632, 860], hills: [[480, 6, 60], [760, 4, 30], [1180, 7, 70], [1000, 2.4, 18]], medal: [200, 225, 280], walls: [],
     rocks: [], barrels: [[560, 3], [566, -3], [1330, 0]], cones: [[400, 3.5], [415, -3.5], [430, 3.5], [1250, -3.5], [1265, 3.5]], movers: [], ice: [],
     stands: [[30, 1, 40, 7], [30, -1, 40, 7], [230, 1, 30, 6], [700, -1, 34, 6], [1120, 1, 30, 6], [1320, -1, 36, 7]],
     fans: [[60, 130, -1], [60, 130, 1], [520, 600, 1], [930, 1000, -1]],
@@ -836,6 +836,11 @@ function computeTrack(def) {
   const pts = curve.getSpacedPoints(N);
   TP.length = TT.length = TL.length = TS.length = 0;
   for (let i = 0; i < N; i++) TP.push(pts[i]);
+  // straighten the road round each fire jump so the kart lands on it
+  for (const ri of def.fire || []) {
+    const a = ri - 45, b = ri + 90, A = TP[(a + N) % N].clone(), B = TP[b % N].clone();
+    for (let i = a; i <= b; i++) { const k = (i + N) % N, w = Math.min(sstep(0, 25, i - a), sstep(0, 25, b - i)); TP[k] = TP[k].clone().lerp(A.clone().lerp(B, (i - a) / (b - a)), w); }
+  }
   for (let i = 0; i < N; i++) {
     const a = TP[(i - 1 + N) % N], b = TP[(i + 1) % N];
     const t = V3(b.x - a.x, 0, b.z - a.z).normalize();
@@ -847,6 +852,7 @@ function computeTrack(def) {
   // elevation: hills are bumps of height h and width w (in samples) centred on a sample
   TY.length = SL.length = 0;
   for (let i = 0; i < N; i++) { let h = 0; for (const [c, hh, w] of def.hills || []) { let d = Math.abs(i - c); d = Math.min(d, N - d); h += hh * Math.exp(-((d / w) ** 2)); } TY.push(h); }
+  computeFire(def);
   for (let i = 0; i < N; i++) SL.push((TY[(i + 1) % N] - TY[(i - 1 + N) % N]) / (2 * TRACK_LEN / N));
   // walls: rock walls in canyon ranges, tyre barriers on the outside of tight corners
   WALL_L.fill(1e9); WALL_R.fill(1e9);
@@ -892,6 +898,114 @@ const terrainY = (x, z, d, i) => { const k = blendK(d); return (TY[i] - .35 * (1
 const tY = (x, z) => { const d = coarseDist(x, z); return terrainY(x, z, d, CN_I); };
 // exact ground under a point: the road's own height and slope near it, crater terrain far from it
 const groundAt = (x, z, info) => { const k = blendK(info.dist); return (TY[info.i] + info.along * SL[info.i]) * (1 - k) + (k > 0 ? craterH(x, z) * k : 0); };
+
+/* ================= fire jumps ================= */
+// a ramp, then a trench of lava across the whole road with a burning hoop hanging over it.
+// Clear it and fly through the hoop for a bonus; hit the hoop's rim or come up short and you
+// drop into the fire and come back on the road before the ramp.
+const FIRE = [];
+const FIRE_RH = 2.2, FIRE_L = 15;
+function computeFire(def) {
+  FIRE.length = 0;
+  for (const ri of def.fire || []) {
+    const top = FIRE_RH * 4.4 + .5, s0 = TS[ri] + top + .4;
+    let ia = ri; while (TS[ia % N] < s0) ia++;
+    let ib = ia; while (TS[ib % N] < TS[ia % N] + FIRE_L) ib++;
+    const ic = Math.round((ia + ib) / 2), c = TP[ic].clone().lerp(TP[ib], 0).add(TP[ia]).multiplyScalar(.5);
+    const L = TS[ib] - TS[ia], half = ROAD_W / 2 + 7.6;
+    FIRE.push({ ri, ia, ib, ic, x: (TP[ia].x + TP[ib].x) / 2, z: (TP[ia].z + TP[ib].z) / 2, y: TY[ic], t: TT[ic].clone(), l: TL[ic].clone(), L, half,
+      floor: TY[ic] - 6, hoopY: TY[ic] + 3.4, hoopR: 2.75, respawn: (ri - 32 + N) % N });
+  }
+}
+function pitAt(x, z, margin) {
+  for (const f of FIRE) {
+    const dx = x - f.x, dz = z - f.z, a = dx * f.t.x + dz * f.t.z, l = dx * f.l.x + dz * f.l.z, m = margin || 0;
+    if (Math.abs(a) < f.L / 2 + m && Math.abs(l) < f.half + m) return f;
+  }
+  return null;
+}
+const inPitRange = i => FIRE.some(f => i >= f.ia - 1 && i <= f.ib + 1);
+// draw a road strip with holes where the pits are
+function ribbonGaps(parent, o1, o2, y, mat, vScale, y2) {
+  const gaps = FIRE.map(f => [f.ia, f.ib]).sort((a, b) => a[0] - b[0]);
+  let from = 0, out = null;
+  for (const [a, b] of gaps) { out = ribbon(parent, o1, o2, y, mat, vScale, from, a, y2); from = b; }
+  out = ribbon(parent, o1, o2, y, mat, vScale, from, N, y2);
+  return out;
+}
+const lavaTex = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256; const g = cv.getContext('2d');
+  g.fillStyle = '#5a0c00'; g.fillRect(0, 0, 256, 256);
+  for (let k = 0; k < 160; k++) {
+    const x = Math.random() * 256, y = Math.random() * 256, r = 8 + Math.random() * 30, gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, Math.random() < .5 ? 'rgba(255,214,90,.95)' : 'rgba(255,120,20,.9)'); gr.addColorStop(1, 'rgba(255,60,0,0)');
+    g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  g.strokeStyle = 'rgba(40,6,0,.8)'; g.lineWidth = 3;
+  for (let k = 0; k < 30; k++) { g.beginPath(); let x = Math.random() * 256, y = Math.random() * 256; g.moveTo(x, y); for (let j = 0; j < 5; j++) { x += (Math.random() - .5) * 60; y += (Math.random() - .5) * 60; g.lineTo(x, y); } g.stroke(); }
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; return t;
+})();
+const glowTex = (() => {
+  const cv = document.createElement('canvas'); cv.width = 4; cv.height = 128; const g = cv.getContext('2d');
+  const gr = g.createLinearGradient(0, 128, 0, 0); gr.addColorStop(0, '#ff6a10'); gr.addColorStop(.45, '#5a1500'); gr.addColorStop(1, '#000'); g.fillStyle = gr; g.fillRect(0, 0, 4, 128);
+  const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; return t;
+})();
+function buildFire() {
+  W.fire = [];
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x2a2420, roughness: .9, emissive: 0xffffff, emissiveMap: glowTex });
+  const lavaMat = new THREE.MeshBasicMaterial({ map: lavaTex });
+  const rimMat = new THREE.MeshStandardMaterial({ map: stripeTex, roughness: .5 });
+  const hoopMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, metalness: .9, roughness: .35, emissive: 0xff5a10, emissiveIntensity: 1.4 });
+  for (const f of FIRE) {
+    const g = group(world, [f.x, f.y, f.z]); g.rotation.y = Math.atan2(f.t.x, f.t.z);
+    const W2 = f.half * 2, D = 6.2;
+    // trench walls glowing from below, the lava floor, striped lips at both edges
+    for (const s of [-1, 1]) {
+      part(new THREE.BoxGeometry(.5, D, f.L + 1), wallMat, g, [s * (f.half + .25), -D / 2 + .05, 0]);
+      part(new THREE.BoxGeometry(W2 + 1, D, .5), wallMat, g, [0, -D / 2 + .05, s * (f.L / 2 + .25)]);
+      part(new THREE.BoxGeometry(W2, .14, .45), rimMat, g, [0, .08, s * (f.L / 2 + .2)]);
+    }
+    const lava = part(new THREE.PlaneGeometry(W2, f.L), lavaMat, g, [0, -5.9, 0], null, [-Math.PI / 2, 0, 0]);
+    lava.material.map.repeat.set(3, 2);
+    // an overhead truss with the burning hoop hanging from it, and a warning board
+    for (const s of [-1, 1]) part(new THREE.BoxGeometry(.5, 11, .5), MAT.steel, g, [s * (f.half + 1.2), 5.5, 0]).castShadow = true;
+    part(new THREE.BoxGeometry(W2 + 3, .6, .6), MAT.steel, g, [0, 10.9, 0]).castShadow = true;
+    const hy = f.hoopY - f.y;
+    for (const s of [-1, 1]) part(new THREE.CylinderGeometry(.04, .04, 10.6 - hy - f.hoopR, 6), MAT.steel, g, [s * f.hoopR * .7, (10.6 + hy + f.hoopR * .7) / 2, 0]);
+    const hoop = part(new THREE.TorusGeometry(f.hoopR, .26, 12, 48), hoopMat, g, [0, hy, 0]);
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 96; const c2 = cv.getContext('2d');
+    c2.fillStyle = '#120806'; c2.fillRect(0, 0, 512, 96); c2.strokeStyle = '#ff6a10'; c2.lineWidth = 6; c2.strokeRect(4, 4, 504, 88);
+    c2.fillStyle = '#ffb347'; c2.font = '400 52px "Russo One", "Arial Black", sans-serif'; c2.textAlign = 'center'; c2.textBaseline = 'middle'; c2.fillText('ОГНЕН СКОК', 256, 52);
+    const st = new THREE.CanvasTexture(cv); st.encoding = THREE.sRGBEncoding;
+    part(new THREE.PlaneGeometry(7, 1.3), new THREE.MeshBasicMaterial({ map: st, side: THREE.DoubleSide }), g, [0, 12, 0], null, [0, Math.PI, 0]);
+    const light = new THREE.PointLight(0xff6a1a, 2.4, 34, 1.6); light.position.set(0, -2.5, 0); g.add(light);
+    g.userData.keep = true;
+    W.fire.push({ f, g, hoop, light, lava });
+  }
+}
+function fireFx(dt, t) {
+  for (const F of W.fire) {
+    const f = F.f;
+    F.lava.material.map.offset.set(t * .02, t * .035);
+    F.light.intensity = 2.2 + Math.sin(t * 17) * .3 + Math.sin(t * 7.3) * .3;
+    const d = Math.hypot(camera.position.x - f.x, camera.position.z - f.z);
+    if (d > 130 || calm.matches) continue;
+    // flames rising out of the pit and licking round the hoop
+    for (let k = 0; k < 5; k++) {
+      const a = (Math.random() - .5) * f.L, l = (Math.random() - .5) * f.half * 2;
+      tmp.set(f.x + f.t.x * a + f.l.x * l, f.floor + .2, f.z + f.t.z * a + f.l.z * l);
+      emit(tmp, (Math.random() - .5) * .8, 3 + Math.random() * 3.5, (Math.random() - .5) * .8, .9 + Math.random() * .6, 1.1 + Math.random() * 1.1, 1.2, Math.random() < .5 ? 0xff7a1a : 0xffc04a, true, .55, 1.5);
+    }
+    for (let k = 0; k < 3; k++) {
+      const a = Math.random() * Math.PI * 2;
+      tmp.set(f.x + f.l.x * Math.cos(a) * f.hoopR, f.hoopY + Math.sin(a) * f.hoopR, f.z + f.l.z * Math.cos(a) * f.hoopR);
+      emit(tmp, (Math.random() - .5) * .6, 1.2 + Math.random() * 1.5, (Math.random() - .5) * .6, .45, .45 + Math.random() * .3, 1, Math.random() < .5 ? 0xff8a2a : 0xffd27a, true, .9, 1);
+    }
+  }
+}
+function fireBurst(x, y, z) {
+  for (let k = 0; k < 30; k++) emit(tmp.set(x, y, z), (Math.random() - .5) * 8, 2 + Math.random() * 6, (Math.random() - .5) * 8, .8, .9, 1.5, Math.random() < .5 ? 0xff6a1a : 0xffd27a, true, 1, 0);
+}
 
 /* ================= renderer and lights ================= */
 const canvas = $('c');
@@ -1295,12 +1409,12 @@ function buildCity(rr) {
   // pavement along the road, neon edge strips, arches, boards
   const paveTex = sRGB(canvasTex(128, (g, s) => { g.fillStyle = '#5d606a'; g.fillRect(0, 0, s, s); g.strokeStyle = '#4a4d56'; g.lineWidth = 3; for (let k = 0; k <= 4; k++) { g.beginPath(); g.moveTo(0, k * 32); g.lineTo(s, k * 32); g.stroke(); g.beginPath(); g.moveTo(k * 32, 0); g.lineTo(k * 32, s); g.stroke(); } }));
   const pave = new THREE.MeshStandardMaterial({ map: paveTex, roughness: .9 });
-  ribbon(world, ROAD_W / 2 + 7.5, ROAD_W / 2 + 1.1, .17, pave, 4);
-  ribbon(world, -ROAD_W / 2 - 1.1, -ROAD_W / 2 - 7.5, .17, pave, 4);
-  ribbon(world, ROAD_W / 2 + 1.1, ROAD_W / 2 + 1.1, .06, MAT.steel, 4, null, null, .17);
+  ribbonGaps(world, ROAD_W / 2 + 7.5, ROAD_W / 2 + 1.1, .17, pave, 4);
+  ribbonGaps(world, -ROAD_W / 2 - 1.1, -ROAD_W / 2 - 7.5, .17, pave, 4);
+  ribbonGaps(world, ROAD_W / 2 + 1.1, ROAD_W / 2 + 1.1, .06, MAT.steel, 4, .17);
   const neonA = new THREE.MeshBasicMaterial({ color: 0x35e6ff, side: THREE.DoubleSide }), neonB = new THREE.MeshBasicMaterial({ color: 0xff3fd0, side: THREE.DoubleSide });
-  ribbon(world, ROAD_W / 2 + 1.4, ROAD_W / 2 + 1.15, .2, neonA, 10).receiveShadow = false;
-  ribbon(world, -ROAD_W / 2 - 1.15, -ROAD_W / 2 - 1.4, .2, neonB, 10).receiveShadow = false;
+  ribbonGaps(world, ROAD_W / 2 + 1.4, ROAD_W / 2 + 1.15, .2, neonA, 10).receiveShadow = false;
+  ribbonGaps(world, -ROAD_W / 2 - 1.15, -ROAD_W / 2 - 1.4, .2, neonB, 10).receiveShadow = false;
   for (let i = 60; i < N; i += 140) {
     const g = group(world, [TP[i].x, TY[i], TP[i].z]); g.rotation.y = headingAt(i);
     part(new THREE.TorusGeometry(ROAD_W / 2 + 2.6, .22, 8, 40, Math.PI), (i / 140 | 0) % 2 ? neonA : neonB, g);
@@ -1358,6 +1472,7 @@ function bakeStatic(root) {
     for (let p = o; p && p !== root; p = p.parent) if (keep.has(p)) return;
     if (o.material.map && o.material.map.offset && W.padMats.includes(o.material)) return;
     if (o.geometry.attributes.color && o.material.vertexColors) return;
+    for (let q = o; q && q !== root; q = q.parent) if (q.userData.keep && q !== o.parent) return;
     if (o.userData.keep || o.geometry.attributes.position.count > 60000) return;
     list.push(o);
   });
@@ -1365,7 +1480,7 @@ function bakeStatic(root) {
 }
 function buildWorld(id) {
   while (world.children.length) { const o = world.children.pop(); o.traverse(c => { if (c.geometry) c.geometry.dispose(); }); }
-  for (const k of ['coins', 'movers', 'padMats', 'obstacles', 'ice', 'ramps', 'pads', 'lights', 'fly', 'crowds']) W[k] = [];
+  for (const k of ['coins', 'movers', 'padMats', 'obstacles', 'ice', 'ramps', 'pads', 'lights', 'fly', 'crowds', 'fire']) W[k] = [];
   W.coinIM = W.gemIM = null;
   W.blink = null;
   TR = TRACKS[id];
@@ -1383,7 +1498,7 @@ function buildWorld(id) {
   const p = gg.attributes.position, col = new Float32Array(p.count * 3), base = new THREE.Color(th.ground);
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i), d = coarseDist(x, z), h = terrainY(x, z, d, CN_I);
-    p.setY(i, h);
+    p.setY(i, pitAt(x, z, 4) ? TY[CN_I] - 7 : h);
     const n = groundH[(((Math.floor(x * 1.3) % 256) + 256) % 256) * 256 + (((Math.floor(z * 1.3) % 256) + 256) % 256)];
     const k = .82 + n * .3 + Math.max(-.25, Math.min(.22, (h - TY[CN_I]) * .08));
     col[i * 3] = base.r * k; col[i * 3 + 1] = base.g * k; col[i * 3 + 2] = base.b * k;
@@ -1401,10 +1516,10 @@ function buildWorld(id) {
   }
 
   // road, kerbs, start line, gantry
-  ribbon(world, ROAD_W / 2, -ROAD_W / 2, .04, MAT.road, 12);
+  ribbonGaps(world, ROAD_W / 2, -ROAD_W / 2, .04, MAT.road, 12);
   MAT.road.map.repeat.set(1, 1);
-  ribbon(world, ROAD_W / 2 + 1.1, ROAD_W / 2, .06, MAT.kerb, 3);
-  ribbon(world, -ROAD_W / 2, -ROAD_W / 2 - 1.1, .06, MAT.kerb, 3);
+  ribbonGaps(world, ROAD_W / 2 + 1.1, ROAD_W / 2, .06, MAT.kerb, 3);
+  ribbonGaps(world, -ROAD_W / 2, -ROAD_W / 2 - 1.1, .06, MAT.kerb, 3);
   const sl = group(world, [TP[0].x, .065, TP[0].z]); sl.rotation.y = headingAt(0);
   part(new THREE.PlaneGeometry(ROAD_W, 1.8), new THREE.MeshStandardMaterial({ map: checkTex, roughness: .7 }), sl, null, null, [-Math.PI / 2, 0, 0]).receiveShadow = true;
   for (const s of [-1, 1]) part(new THREE.BoxGeometry(.45, 5.6, .45), MAT.steel, sl, [s * (ROAD_W / 2 + 1.5), 2.8, 0]).castShadow = true;
@@ -1417,7 +1532,7 @@ function buildWorld(id) {
   // tyre barriers on the outside of corners, rock walls in the canyon
   const stacks = [];
   for (let i = 0; i < N; i += 2) for (const [side, arr] of [[1, WALL_L], [-1, WALL_R]]) {
-    if (arr[i] > 1e8 || arr[i] < ROAD_W / 2 + 2.5) continue;
+    if (arr[i] > 1e8 || arr[i] < ROAD_W / 2 + 2.5 || inPitRange(i)) continue;
     const v = onTrack(i, side * (arr[i] + .3)); v.h = headingAt(i); stacks.push(v);
   }
   if (stacks.length) {
@@ -1438,7 +1553,7 @@ function buildWorld(id) {
     W.padMats.push(mat); W.pads.push({ x: TP[i].x, z: TP[i].z });
   }
   // ramps
-  for (const [i, rh] of TR.ramps) {
+  for (const [i, rh] of TR.ramps.concat((TR.fire || []).map(i => [i, FIRE_RH]))) {
     const R = { len: rh * 4.4, top: rh * 4.4 + .5, h: rh, w: Math.min(7, ROAD_W - 1), x: TP[i].x, z: TP[i].z, t: TT[i], l: TL[i] };
     const rs = new THREE.Shape(); rs.moveTo(0, 0); rs.lineTo(R.len, R.h); rs.lineTo(R.top, R.h); rs.lineTo(R.top, 0); rs.lineTo(0, 0);
     const rg = group(world, [R.x, TY[i] + .04, R.z]); rg.rotation.order = 'YXZ'; rg.rotation.y = headingAt(i); rg.rotation.x = -Math.atan(SL[i]);
@@ -1450,6 +1565,7 @@ function buildWorld(id) {
     }
     R.i = i; W.ramps.push(R);
   }
+  buildFire();
   // static obstacles
   for (const [i, lat, r] of TR.rocks) {
     const v = onTrack(i, lat);
@@ -1487,6 +1603,7 @@ function buildWorld(id) {
   for (let i = 10; i < N; i += every) lampPos.push([i, ((i / every) | 0) % 2 ? 1 : -1]);
   const poleGeo = new THREE.CylinderGeometry(.08, .12, 6, 10), armGeo = new THREE.BoxGeometry(.1, .1, 2), headGeo = new THREE.BoxGeometry(.5, .14, .8);
   for (const [i, s] of lampPos) {
+    if (inPitRange(i) || inPitRange(i + 4) || inPitRange(i - 4)) continue;
     const lat = s * (ROAD_W / 2 + 3.6); if ((s > 0 ? WALL_L[i] : WALL_R[i]) < ROAD_W / 2 + 3) continue;
     const v = onTrack(i, lat), g = group(world, [v.x, v.y, v.z]); g.rotation.y = Math.atan2(-TL[i].x * s, -TL[i].z * s);
     part(poleGeo, MAT.steel, g, [0, 3, 0]).castShadow = true;
@@ -1497,6 +1614,7 @@ function buildWorld(id) {
   // coins: rows on the racing line, arcs in the air over every ramp, blue crystals worth 5 on hilltops
   const coin = (v, y, val) => W.coins.push({ x: v.x, y, z: v.z, val, taken: false });
   for (let i = 24; i < N - 10; i += 38) for (let k = 0; k < 4; k++) {
+    if (FIRE.some(f => i + k * 4 >= f.ri - 2 && i + k * 4 <= f.ib + 4)) continue;
     const lat = Math.sin(i * .37) * (ROAD_W / 2 - 2), v = onTrack(i + k * 4, lat);
     coin(v, v.y + 1, 1);
   }
@@ -1700,7 +1818,7 @@ new ResizeObserver(resize).observe($('stage')); resize();
 /* ================= particles (soft sprites) ================= */
 const PART = [];
 const PSYS = [false, true].map(add => {
-  const n = 200, g = new THREE.BufferGeometry();
+  const n = add ? 520 : 220, g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage));
   g.setAttribute('pcolor', new THREE.BufferAttribute(new Float32Array(n * 4), 4).setUsage(THREE.DynamicDrawUsage));
   g.setAttribute('psize', new THREE.BufferAttribute(new Float32Array(n), 1).setUsage(THREE.DynamicDrawUsage));
@@ -1854,12 +1972,19 @@ function placeAt(i) {
   P.idx = i; P.prevF = i / N; P.wrong = 0; P.off = false; P.slip = 0; P.accLong = 0; P.accLat = 0;
 }
 function resetRace() {
+  P.fallT = 0; P.hoops = 0; P.falls = 0; P.hoopF = null;
   placeAt(N - 26); P.x += TL[N - 26].x * -2.3; P.z += TL[N - 26].z * -2.3; P.prog = -26; P.rank = 4;
   P.cp = false; P.lap = 1; P.laps = []; camHead = P.head; raceCoins = 0; P.hits = 0; P.ultra = 0; P.jumps = 0; P.nitro = 0; P.nitroOn = false;
   resetRivals();
   for (const c of W.coins) c.taken = false;
   for (const o of W.obstacles) if (o.kind === 'cone' || o.kind === 'barrel') { const v = o.home || (o.home = { x: o.x, z: o.z }); o.x = v.x; o.z = v.z; o.vx = o.vz = 0; o.knocked = 0; o.g.position.set(v.x, o.g.position.y, v.z); o.g.rotation.set(0, 0, 0); }
   skid.reset();
+}
+function respawnBefore(f) {
+  const keep = { cp: P.cp, lap: P.lap, laps: P.laps, prevF: P.prevF, hits: P.hits, ultra: P.ultra, jumps: P.jumps, prog: P.prog, rank: P.rank, nitro: P.nitro, hoops: P.hoops, falls: P.falls };
+  const back = (P.idx - f.respawn + N) % N;
+  placeAt(f.respawn); Object.assign(keep, { prog: keep.prog - back }); Object.assign(P, keep); P.pi = f.respawn; P.fallT = 0;
+  msg('Връщаш се преди скока', 1, true);
 }
 function respawn() { const keep = { cp: P.cp, lap: P.lap, laps: P.laps, prevF: P.prevF, hits: P.hits, ultra: P.ultra, jumps: P.jumps, prog: P.prog, rank: P.rank }; placeAt(P.idx); Object.assign(P, keep); msg('Обратно на пистата', .9, true); }
 function endDrift(boostOk) {
@@ -2049,7 +2174,9 @@ function physics(dt, t, live) {
   // height: the kart follows the ground, and leaves it when the ground falls away faster than gravity
   // (crests and ramp tops); landing a hop with the button held starts a drift
   const ra = rampAt(P.x, P.z);
-  const ground = groundAt(P.x, P.z, info) + (ra ? ra.h + .04 : 0);
+  const pit = pitAt(P.x, P.z);
+  const ground = pit ? pit.floor : groundAt(P.x, P.z, info) + (ra ? ra.h + .04 : 0);
+  const yPrev = P.y, aPrev = P.hoopA;
   if (P.air) {
     P.vy -= G * (P.hop ? 2.4 : 1) * dt; P.y += P.vy * dt; if (!P.hop) P.airT += dt;
     if (P.y <= ground) {
@@ -2066,9 +2193,22 @@ function physics(dt, t, live) {
     // a sudden step (the side of a ramp, a rock edge) is climbed, never used as a launch
     const step = ground - P.y, gv = Math.abs(step) > .45 ? 0 : step / dt, cap = speed * .45 + 1;
     if (P.gv > .8 && P.gv - gv > G * 1.3 * dt + .2 && speed > 9) { P.air = true; P.vy = Math.min(P.gv, cap); P.airT = 0; P.y += P.vy * dt; }
+    else if (step < -.45) { P.air = true; P.vy = Math.min(0, P.gv); P.airT = 0; }
     else { P.y = ground; P.gv = Math.max(-cap, Math.min(cap, gv)); }
   }
 
+  // the burning hoop: crossing its plane through the opening pays, touching the rim knocks you down
+  for (const f of FIRE) {
+    const dx = P.x - f.x, dz = P.z - f.z, a = dx * f.t.x + dz * f.t.z;
+    if (P.hoopF === f && P.hoopA < 0 && a >= 0 && P.air) {
+      const l = dx * f.l.x + dz * f.l.z, r = Math.hypot(l, P.y + .5 - f.hoopY);
+      if (r < f.hoopR - .55) { P.hoops++; raceCoins += 3; P.nitro = Math.min(100, P.nitro + 20); msg('През огнения обръч! +3 ◎ +20 буст', 1.2, true); blip(990, .25, 'triangle'); fireBurst(P.x, P.y + .5, P.z); }
+      else if (r < f.hoopR + .85) { P.vx *= .25; P.vz *= .25; P.vy = Math.min(P.vy, -2); hit(8, P.x, P.y + .6, P.z); fireBurst(P.x, P.y + .5, P.z); msg('Удари обръча!', .8, true); }
+    }
+    if (Math.abs(a) < 25) { P.hoopF = f; P.hoopA = a; }
+  }
+  // falling into the fire: a short pause, then back on the road before the ramp
+  if (pit && P.y < pit.y - 1.3 && !P.fallT) { P.fallT = 1.2; P.falls++; fireBurst(P.x, pit.y - 1, P.z); blip(80, .5, 'sawtooth'); msg('Падна в огъня!', 1.2); if (P.drift) endDrift(false); }
   if (info.dist > ROAD_W / 2 + 26) { const i = info.i; P.x += (TP[i].x - P.x) * .06; P.z += (TP[i].z - P.z) * .06; P.vx *= .97; P.vz *= .97; if (msgT <= 0) msg('Върни се на пистата', 1, true); }
   const f = P.idx / N;
   if (live) {
@@ -2124,6 +2264,7 @@ function moveWorld(dt, t) {
     if (s < .05) o.knocked = 0;
   }
   placeCoins(t);
+  fireFx(dt, t);
 }
 
 /* ================= visuals and camera ================= */
@@ -2221,12 +2362,13 @@ function visuals(dt, t) {
     tmp2.set(P.x - fx * dist, P.y + 2.15 + (P.air ? .4 : 0), P.z - fz * dist);
     const ty = groundAt(tmp2.x, tmp2.z, trackInfo(tmp2.x, tmp2.z, P.idx)) + 1;
     if (tmp2.y < ty) tmp2.y = ty;
-    if (camSnap || camera.position.distanceTo(tmp2) > 25) { camera.position.copy(tmp2); if (!camSnap) camHead = P.head; }
+    if (P.fallT > 0) { /* watch the fall from where we are */ }
+    else if (camSnap || camera.position.distanceTo(tmp2) > 25) { camera.position.copy(tmp2); if (!camSnap) camHead = P.head; }
     else camera.position.lerp(tmp2, 1 - Math.exp(-dt * 7));
     if (!still && shake > 0) { camera.position.x += (Math.random() - .5) * shake * .25; camera.position.y += (Math.random() - .5) * shake * .25; }
     if (P.boost > 0 && !still) camera.position.y += (Math.random() - .5) * .05;
     shake *= Math.exp(-dt * 5);
-    look.set(P.x + fx * 3.5, P.y + .9, P.z + fz * 3.5);
+    if (P.fallT > 0) look.set(P.x, P.y + .5, P.z); else look.set(P.x + fx * 3.5, P.y + .9, P.z + fz * 3.5);
     camera.lookAt(look);
     camera.fov = 60 + (still ? 0 : sf * 8 + (P.boost > 0 ? 6 : 0));
     }
@@ -2293,6 +2435,7 @@ function showEnd() {
   if (P.newBest) rows.push(['Нов рекорд на обиколка', 15]);
   if (!P.hits) rows.push(['Без нито един удар', 20]);
   if (P.ultra) rows.push(['Ултра турбо × ' + P.ultra, P.ultra * 3]);
+  if (P.hoops) rows.push(['Огнени обръчи × ' + P.hoops, P.hoops * 5]);
   if (P.jumps) rows.push(['Големи скокове × ' + P.jumps, P.jumps * 2]);
   if (first) rows.push(['Първи финал на тази писта', 40]);
   const earned = rows.reduce((a, r) => a + r[1], 0);
@@ -2487,7 +2630,8 @@ function placeRival(r) {
   r.i = i;
   r.x = TP[i].x + (TP[j].x - TP[i].x) * f + TL[i].x * r.lat; r.z = TP[i].z + (TP[j].z - TP[i].z) * f + TL[i].z * r.lat;
   const ra = rampAt(r.x, r.z);
-  r.gy = TY[i] + (TY[j] - TY[i]) * f + (ra ? ra.h + .04 : 0);
+  const pit = pitAt(r.x, r.z);
+  r.gy = pit ? pit.floor : TY[i] + (TY[j] - TY[i]) * f + (ra ? ra.h + .04 : 0); r.pit = pit;
   r.ra = ra;
 }
 // signed curvature at sample i (1/m): positive turns left, which is the +lat side
@@ -2518,6 +2662,9 @@ function rivalsStep(dt, live) {
       vt = Math.min(vt, Math.sqrt(vc * vc + 2 * 11 * k * ds));
     }
     vt *= band; vmax *= band;
+    // a fire jump ahead: carry enough speed to clear it
+    const fj = FIRE.find(f => { const d = ((f.ri - i) % N + N) % N; return d < 70 || (i >= f.ri && i <= f.ib + 4); });
+    if (fj) vt = Math.max(vt, 19.5);
     // --- traffic: slow behind someone we cannot pass, otherwise pick the free side
     let laneWant = null;
     for (const o of field) {
@@ -2536,6 +2683,7 @@ function rivalsStep(dt, live) {
     for (let k = 0; k <= 12; k += 3) line += curvAt((i + k) % N) * 26;
     for (let k = 16; k <= 40; k += 4) line -= curvAt((i + k) % N) * 14;
     let lane = Math.max(-lim, Math.min(lim, line * lim + r.off));
+    if (fj) lane = r.off * .5;
     if (laneWant != null) lane = laneWant;
     // boost pads ahead pull the kart over them
     for (const b of W.pads) { const d = Math.hypot(b.x - r.x, b.z - r.z); if (d < 26 && d > 2 && laneWant == null) lane = lane * .3; }
@@ -2565,7 +2713,8 @@ function rivalsStep(dt, live) {
     // finish line
     if (r.finish == null && r.s >= LAPS * N && (state === 'race' || state === 'done' || state === 'end')) r.finish = clock - raceT0;
     placeRival(r);
-    if (r.y > r.gy + .02) { r.vy -= G * dt; r.y = Math.max(r.gy, r.y + r.vy * dt); }
+    if (r.pit && r.y < r.pit.y - 1.3) { fireBurst(r.x, r.pit.y - 1, r.z); r.s -= ((r.i - r.pit.respawn + N) % N); r.v = 6; r.vy = 0; placeRival(r); r.y = r.gy; }
+    if (r.y > r.gy + .02 || (r.pit && r.y > r.gy)) { r.vy -= G * dt; r.y = Math.max(r.gy, r.y + r.vy * dt); }
     else { r.vy = Math.max(-8, Math.min(r.v * .45, (r.gy - r.y) / dt)); r.y = r.gy; }
     // looks: heading along the road plus the lateral motion, roll into bends, wheels turning
     const turn = curvAt(i);
@@ -2617,7 +2766,10 @@ function update(dt) {
     if (n !== lastCount && n >= 1 && n <= 3) { lastCount = n; msg(String(n), .9); blip(440, .15); W.lights[3 - n].material.color.setHex(0xff3030); }
     if (countT <= .2) { state = 'race'; raceT0 = lapT0 = t; msg('Старт!', .9); blip(880, .3); for (const l of W.lights) l.material.color.setHex(0x3dff6a); }
   }
-  if (state === 'race') physics(dt, t, true);
+  if (P.fallT > 0 && (state === 'race' || state === 'done')) {
+    P.fallT -= dt; P.vy -= G * dt; P.y += P.vy * dt; P.vx *= .97; P.vz *= .97; P.x += P.vx * dt; P.z += P.vz * dt;
+    if (P.fallT <= 0) { const f = FIRE.reduce((b, f) => Math.hypot(P.x - f.x, P.z - f.z) < Math.hypot(P.x - b.x, P.z - b.z) ? f : b, FIRE[0]); respawnBefore(f); }
+  } else if (state === 'race') physics(dt, t, true);
   else if (state === 'done' || state === 'end') physics(dt, t, false);
   if (state === 'race' || state === 'done' || state === 'end') rivalsStep(dt, state === 'race');
   else if (state === 'count') rivalsStep(dt, false);

@@ -335,6 +335,7 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/geometries/RoundedBoxGeometry.js"></script>
 <script>
 (() => {
 'use strict';
@@ -771,7 +772,7 @@ const ZM = {
   skinAO: softSkin(new THREE.MeshPhysicalMaterial({ color: opt.zcolor, vertexColors: true, roughness: .5, clearcoat: .18, clearcoatRoughness: .45 })),
   skin:   softSkin(new THREE.MeshPhysicalMaterial({ color: opt.zcolor, roughness: .5, clearcoat: .18, clearcoatRoughness: .45, side: THREE.DoubleSide })),
   eye:    new THREE.MeshPhysicalMaterial({ color: 0xf5f2ea, roughness: .12, clearcoat: 1, clearcoatRoughness: .05 }),
-  iris:   new THREE.MeshPhysicalMaterial({ color: 0x2e2f33, roughness: .2, clearcoat: 1 }),
+  iris:   new THREE.MeshPhysicalMaterial({ color: 0x3a5a2a, roughness: .2, clearcoat: 1 }),
   pupil:  new THREE.MeshPhysicalMaterial({ color: 0x040404, roughness: .1, clearcoat: 1 }),
   spark:  new THREE.MeshBasicMaterial({ color: 0xffffff }),
   mouth:  new THREE.MeshBasicMaterial({ color: 0x160304, side: THREE.BackSide }),
@@ -783,11 +784,11 @@ function buildDriver(K) {
   const body = group(root);
   const D = { root, body, arms: [], lids: [] };
   const mouthDark = (x, y, z) => lerp(1, .06, Math.min(1, Math.max(0, 1 - cavity(x, y, z) / .014)));
-  part(polygonize(bodySDF, [-.8, -.02, -.7], [.8, 2.02, .8], .019, sceneSDF, null, mouthDark), ZM.skinAO, body);
+  part(polygonize(bodySDF, [-.8, -.02, -.7], [.8, 2.02, .8], .0135, sceneSDF, null, mouthDark), ZM.skinAO, body);
   for (const a of ARMS) {
     const pivot = group(body, [a.x, a.y, a.z]);
     const to = v => { v.applyAxisAngle(new THREE.Vector3(0, 0, 1), a.rz); v.x += a.x; v.y += a.y; v.z += a.z; };
-    part(polygonize(armLocal, [-.14, -.42, -.11], [.14, .12, .11], .011, sceneSDF, to), ZM.skinAO, pivot);
+    part(polygonize(armLocal, [-.14, -.42, -.11], [.14, .12, .11], .0075, sceneSDF, to), ZM.skinAO, pivot);
     D.arms.push({ pivot, a, grip: K.grips[a.s > 0 ? 1 : 0] });
   }
   const look = new THREE.Vector3(.08, .3, .95).normalize();
@@ -800,11 +801,22 @@ function buildDriver(K) {
     part(SPH, ZM.pupil, g, [pp.x, pp.y, pp.z], [e.r * .33, e.r * .33, e.r * .33]);
     const sp = spark.clone().multiplyScalar(e.r * .99);
     part(SPH, ZM.spark, g, [sp.x, sp.y, sp.z], [e.r * .09, e.r * .09, e.r * .05]);
+    const sp2 = V3(-.25, -.2, .95).normalize().multiplyScalar(e.r * .99); part(SPH, ZM.spark, g, [sp2.x, sp2.y, sp2.z], [e.r * .04, e.r * .04, e.r * .02]);
     D.lids.push(part(new THREE.SphereGeometry(e.r * 1.05, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2), ZM.skin, g));
   }
   part(SPH, ZM.mouth, body, [MC.x, MC.y - .03, MC.z - .03], [.235, .2, .19]);
   const tongue = group(body, [MC.x + .06, MC.y - .13, MC.z - .07]); D.tongue = tongue;
-  part(polygonize(tongueSDF, [-.15, -.42, -.12], [.15, .08, .12], .009), ZM.tongue, tongue);
+  part(polygonize(tongueSDF, [-.15, -.42, -.12], [.15, .08, .12], .0065), ZM.tongue, tongue);
+  // rosy cheeks under the eyes, two small nostrils, a soft rim round each eye socket
+  const blush = new THREE.MeshBasicMaterial({ color: 0xff6f8a, transparent: true, opacity: .32, depthWrite: false });
+  for (const e of EYES) {
+    const cx = e.x * 1.25, cy = e.y - e.r * 1.25, cz = zs(cx, cy) + .006;
+    const n = V3(cx / (RX * RX), (cy - CY) / (RY * RY), cz / (RZ * RZ)).normalize();
+    const c = part(new THREE.CircleGeometry(e.r * .62, 24), blush, body, [cx + n.x * .004, cy + n.y * .004, cz], [1.25, .7, 1]);
+    c.lookAt(c.position.clone().add(n).applyMatrix4(body.matrixWorld)); c.quaternion.copy(new THREE.Quaternion().setFromUnitVectors(V3(0, 0, 1), n)); c.renderOrder = 2;
+    part(new THREE.TorusGeometry(e.r * 1.03, e.r * .07, 8, 40), ZM.skin, body, [e.x, e.y, e.z + e.r * .32], [1, 1, .6]);
+  }
+  for (const s2 of [-1, 1]) { const nx = MC.x + s2 * .045, ny = MC.y + .14, nz = zs(nx, ny) - .004; part(SPH, ZM.mouth, body, [nx, ny, nz], [.013, .009, .012]); }
   root.traverse(o => { if (o.isMesh) { o.castShadow = o.material !== ZM.mouth; o.receiveShadow = true; o.material.envMapIntensity = .4; } });
 
   let nextBlink = 1.5, blinkAt = -1;
@@ -1883,8 +1895,12 @@ const VEH = {
 };
 const VM = {
   glass: new THREE.MeshPhysicalMaterial({ color: 0x1b222c, roughness: .06, metalness: .3, clearcoat: 1 }),
-  trim: new THREE.MeshStandardMaterial({ color: 0x1a1c21, roughness: .55, flatShading: true }),
-  tire: new THREE.MeshStandardMaterial({ color: 0x151517, roughness: .85, flatShading: true }),
+  trim: new THREE.MeshStandardMaterial({ color: 0x1a1c21, roughness: .5 }),
+  tire: new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: .82 }),
+  chrome: new THREE.MeshStandardMaterial({ color: 0xe6e9ee, roughness: .12, metalness: 1 }),
+  disc: new THREE.MeshStandardMaterial({ color: 0x8c9098, roughness: .35, metalness: .9 }),
+  red: new THREE.MeshStandardMaterial({ color: 0xc8202a, roughness: .4 }),
+  plate: new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: .5 }),
   lamp: new THREE.MeshBasicMaterial({ color: 0xfff6dc }),
   lampY: new THREE.MeshBasicMaterial({ color: 0xffd23f }),
   tail: new THREE.MeshBasicMaterial({ color: 0xd0121c }),
@@ -1892,7 +1908,7 @@ const VM = {
   rimBlue: new THREE.MeshStandardMaterial({ color: 0x2f5fd0, roughness: .35, metalness: .6 }),
   rimLilac: new THREE.MeshStandardMaterial({ color: 0x9f9bc6, roughness: .3, metalness: .8 }),
   rimDark: new THREE.MeshStandardMaterial({ color: 0x3a3d46, roughness: .4, metalness: .6 }),
-  yellow: new THREE.MeshStandardMaterial({ color: 0xf2c51c, roughness: .55, flatShading: true }),
+  yellow: new THREE.MeshPhysicalMaterial({ color: 0xf2c51c, roughness: .35, clearcoat: .8, clearcoatRoughness: .15 }),
   silver: new THREE.MeshStandardMaterial({ color: 0xb9bec7, roughness: .3, metalness: .85 }),
   pink: new THREE.MeshBasicMaterial({ color: 0xff7ab8 }), mint: new THREE.MeshBasicMaterial({ color: 0x7dffb0 }),
   rainbow: new THREE.MeshBasicMaterial({ map: (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d'); const gr = g.createConicGradient ? g.createConicGradient(0, 64, 64) : null; if (gr) { ['#ff4fa3', '#ffd23f', '#5fe8a0', '#4fb8ff', '#b06bff', '#ff4fa3'].forEach((c, i) => gr.addColorStop(i / 5, c)); g.fillStyle = gr; } else g.fillStyle = '#ffd23f'; g.beginPath(); g.arc(64, 64, 64, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(64, 64, 20, 0, 7); g.fill(); const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; return t; })() }),
@@ -1900,18 +1916,51 @@ const VM = {
   flameY: new THREE.MeshBasicMaterial({ color: 0xffc94a, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false }),
   flameB: new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false })
 };
-const box = (a, b, c) => new THREE.BoxGeometry(a, b, c);
+const box = (a, b, c) => THREE.RoundedBoxGeometry ? new THREE.RoundedBoxGeometry(a, b, c, 2, Math.min(a, b, c) * .24) : new THREE.BoxGeometry(a, b, c);
 const cylX = (r, h, seg) => { const g = new THREE.CylinderGeometry(r, r, h, seg || 16); g.rotateZ(Math.PI / 2); return g; };
 const cylZ = (r, h, seg) => { const g = new THREE.CylinderGeometry(r, r, h, seg || 16); g.rotateX(Math.PI / 2); return g; };
 function carWheel(V, x, y, z, r, w, rim, front, spokes, lens) {
   const st = group(V.g, [x, y, z]), sp = group(st), s = Math.sign(x);
-  part(cylX(r, w, 18), VM.tire, sp);
-  part(cylX(r * .9, w + .03, 18), VM.tire, sp);
-  part(cylX(r * .62, w + .04, 14), rim, sp);
-  if (spokes) for (let k = 0; k < 5; k++) { const a = group(sp); a.rotation.x = k / 5 * Math.PI * 2; part(box(.03, r * .42, r * .13), rim, a, [s * (w / 2 + .02), r * .32, 0]); }
-  if (lens) part(cylX(r * .42, .02, 20), VM.rainbow, sp, [s * (w / 2 + .035), 0, 0], null, [0, 0, 0]);
-  part(cylX(r * .14, w + .08, 10), VM.silver, sp);
+  // tyre: rounded shoulders and a slightly bulged sidewall
+  const P2 = [], R = r, hw = w / 2, rr = r * .66, c = Math.min(.07, w * .25);
+  P2.push(new THREE.Vector2(rr, -hw * .92));
+  for (let k = 0; k <= 6; k++) { const a = k / 6 * Math.PI / 2; P2.push(new THREE.Vector2(R - c + Math.sin(a) * c, -hw + c - Math.cos(a) * c)); }
+  for (let k = 0; k <= 6; k++) { const a = k / 6 * Math.PI / 2; P2.push(new THREE.Vector2(R - c + Math.cos(a) * c, hw - c + Math.sin(a) * c)); }
+  P2.push(new THREE.Vector2(rr, hw * .92));
+  const tg = new THREE.LatheGeometry(P2, 28); tg.rotateZ(Math.PI / 2); part(tg, VM.tire, sp);
+  // rim: a dished barrel, a lip, hub and five lug nuts
+  part(cylX(rr, w * .86, 22), rim, sp);
+  part(new THREE.TorusGeometry(rr * .98, .018, 6, 28), VM.chrome, sp, [s * hw * .9, 0, 0], null, [0, Math.PI / 2, 0]);
+  part(cylX(rr * .9, .02, 22), VM.trim, sp, [s * (hw * .5), 0, 0]);
+  if (spokes) for (let k = 0; k < 5; k++) { const a = group(sp); a.rotation.x = k / 5 * Math.PI * 2; part(box(.03, r * .44, r * .14), rim, a, [s * (hw * .82), r * .3, 0]); }
+  else for (let k = 0; k < 8; k++) { const a = group(sp); a.rotation.x = k / 8 * Math.PI * 2; part(box(.025, r * .4, r * .05), rim, a, [s * (hw * .8), r * .33, 0]); }
+  if (lens) part(cylX(r * .42, .02, 20), VM.rainbow, sp, [s * (hw + .015), 0, 0]);
+  part(cylX(r * .16, .06, 12), VM.chrome, sp, [s * (hw * .85), 0, 0]);
+  for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; part(cylX(.016, .05, 6), VM.chrome, sp, [s * (hw * .87), Math.cos(a) * r * .24, Math.sin(a) * r * .24]); }
+  // brake disc and caliper sit behind the rim and do not spin
+  part(cylX(rr * .78, .03, 22), VM.disc, st, [-s * (hw * .2), 0, 0]);
+  part(box(.08, r * .32, r * .38), VM.red, st, [-s * (hw * .2) + s * .03, r * .34, front ? -r * .25 : r * .25]);
   V.wheels.push({ st, sp, front });
+}
+// shared touches for the closed cars: mirrors, door seams and handles, wipers, number plates, a fuel cap
+function carDetails(V, o) {
+  const g = V.g;
+  for (const s of [-1, 1]) {
+    const m = group(g, [s * (o.w / 2 + .05), o.mirrorY, o.mirrorZ]);
+    part(box(.06, .05, .12), VM.trim, m, [-s * .04, 0, 0]);
+    part(box(.1, .1, .14), V.paint, m, [s * .03, .02, 0]);
+    part(box(.005, .07, .1), VM.chrome, m, [s * .03, .02, -.07]);
+    for (const dz of o.doors) part(box(.012, o.doorH, .012), VM.trim, g, [s * (o.w / 2 + .004), o.doorY, dz]);
+    part(box(.012, .012, o.doors[0] - o.doors[1]), VM.trim, g, [s * (o.w / 2 + .004), o.doorY + o.doorH / 2, (o.doors[0] + o.doors[1]) / 2]);
+    part(box(.03, .035, .13), VM.chrome, g, [s * (o.w / 2 + .015), o.doorY + o.doorH * .3, o.doors[1] + .2]);
+    const wp = group(g, [s * .3, o.wiperY, o.wiperZ]); wp.rotation.set(o.wiperTilt, s * .25, 0);
+    part(box(.6, .02, .025), VM.trim, wp);
+  }
+  for (const [z, f] of [[o.plateF, 1], [o.plateR, -1]]) {
+    part(box(.5, .14, .02), VM.plate, g, [0, o.plateY, z]);
+    part(box(.46, .03, .022), VM.trim, g, [0, o.plateY, z + f * .002]);
+  }
+  part(cylX(.06, .02, 14), VM.trim, g, [-(o.w / 2 + .005), o.doorY + .12, o.fuelZ]);
 }
 function cabin(V, mat, roofMat, prof, width, roofY, roofZ, roofLen) {
   const sh = new THREE.Shape(); sh.moveTo(prof[0][0], prof[0][1]); for (const p of prof.slice(1)) sh.lineTo(p[0], p[1]); sh.lineTo(prof[0][0], prof[0][1]);
@@ -1937,7 +1986,7 @@ function bakeVehicle(V) {
   V.g.traverse(o => { if (o.isMesh && !NO_SHADOW.has(o.material) && !String(o.material.type).includes('Basic')) { o.castShadow = true; o.receiveShadow = true; } });
 }
 function buildRally(paint, acc) {
-  const V = { kind: 'rally', g: new THREE.Group(), wheels: [], exhausts: [V3(-.45, .32, -1.72)], eye: V3(0, 1.08, .1), tail: [V3(-.6, .68, -1.7), V3(.6, .68, -1.7)], showDriver: false };
+  const V = { paint, kind: 'rally', g: new THREE.Group(), wheels: [], exhausts: [V3(-.45, .32, -1.72)], eye: V3(0, 1.08, .1), tail: [V3(-.6, .68, -1.7), V3(.6, .68, -1.7)], showDriver: false };
   const g = V.g;
   part(box(1.66, .5, 3.3), paint, g, [0, .6, 0]);
   part(box(1.5, .1, .85), paint, g, [0, .88, 1.2]);
@@ -1962,7 +2011,17 @@ function buildRally(paint, acc) {
   part(box(1.95, .06, .42), acc, g, [0, .28, 1.72]);
   part(box(1.8, .26, .22), acc, g, [0, .42, -1.68]);
   part(box(1.92, .05, .42), acc, g, [0, 1.7, -1.55]);
-  for (const [s, z] of [[-1, 1.05], [1, 1.05], [-1, -1.05], [1, -1.05]]) carWheel(V, s * .78, .33, z, .33, .26, VM.rimBlue, z > 0);
+  // grille slats, chrome rings round the lamps, a roof vent, mud flaps and an antenna
+  for (let k = 0; k < 4; k++) part(box(1.0, .022, .02), VM.chrome, g, [0, .64 + k * .05, 1.69]);
+  for (const s of [-1, 1]) {
+    part(new THREE.TorusGeometry(.09, .014, 6, 20), VM.chrome, g, [s * .24, .72, 1.705]);
+    for (const x of [.13, .36]) part(new THREE.TorusGeometry(.088, .016, 6, 20), VM.chrome, g, [s * x, .5, 1.86]);
+    part(box(.22, .2, .03), VM.trim, g, [s * .78, .2, -1.3]);
+  }
+  part(box(.36, .05, .36), VM.trim, g, [0, 1.42, .05]);
+  part(new THREE.CylinderGeometry(.008, .012, .7, 5), VM.trim, g, [.55, 1.65, -.95], null, [-.3, 0, 0]);
+  carDetails(V, { w: 1.66, mirrorY: 1.0, mirrorZ: .78, doors: [.62, -.6], doorY: .75, doorH: .5, wiperY: 1.0, wiperZ: .86, wiperTilt: -.85, plateF: 1.83, plateR: -1.8, plateY: .44, fuelZ: -.95 });
+  for (const [s, z] of [[-1, 1.05], [1, 1.05], [-1, -1.05], [1, -1.05]]) carWheel(V, s * .8, .33, z, .33, .26, VM.rimBlue, z > 0);
   addFlames(V); return V;
 }
 function buildFormula(paint) {
@@ -1991,11 +2050,22 @@ function buildFormula(paint) {
   const sw = group(g, [0, .84, .2]); sw.quaternion.setFromUnitVectors(V3(0, 0, 1), V3(0, .36, -.46).normalize());
   const swSpin = group(sw); part(new THREE.TorusGeometry(.15, .022, 10, 32), VM.trim, swSpin); part(cylZ(.04, .04, 12), VM.silver, swSpin);
   V.sw = swSpin; V.grips = [group(swSpin, [-.15, 0, .02]), group(swSpin, [.15, 0, .02])];
+  // suspension arms out to every wheel, small mirrors, a number on the nose, a roll hoop and seat belt
+  for (const [s, z, x] of [[-1, .95, .8], [1, .95, .8], [-1, -.85, .86], [1, -.85, .86]]) for (const dy of [.08, -.08]) {
+    const a = V3(s * .32, (z > 0 ? .45 : .45) + dy, z), b = V3(s * (x - .18), (z > 0 ? .38 : .46) + dy, z), d = b.clone().sub(a);
+    const m = part(new THREE.CylinderGeometry(.018, .018, d.length(), 6), VM.silver, g); m.position.copy(a).add(b).multiplyScalar(.5); m.quaternion.setFromUnitVectors(V3(0, 1, 0), d.normalize());
+  }
+  for (const s of [-1, 1]) { part(new THREE.CylinderGeometry(.012, .012, .2, 5), VM.trim, g, [s * .38, .9, .3], null, [0, 0, s * .6]); part(box(.13, .08, .04), paint, g, [s * .46, .98, .3]); part(box(.11, .06, .01), VM.chrome, g, [s * .46, .98, .277]); }
+  const nc = document.createElement('canvas'); nc.width = nc.height = 128; const nx = nc.getContext('2d');
+  nx.fillStyle = '#16171c'; nx.beginPath(); nx.arc(64, 64, 60, 0, 7); nx.fill(); nx.fillStyle = '#fff'; nx.font = '400 78px "Russo One", "Arial Black", sans-serif'; nx.textAlign = 'center'; nx.textBaseline = 'middle'; nx.fillText('7', 64, 70);
+  const nt = new THREE.CanvasTexture(nc); nt.encoding = THREE.sRGBEncoding;
+  part(new THREE.CircleGeometry(.14, 24), new THREE.MeshBasicMaterial({ map: nt }), g, [0, .83, 1.0], null, [-Math.PI / 2, 0, 0]);
+  part(new THREE.TorusGeometry(.22, .03, 8, 24, Math.PI), VM.silver, g, [0, .95, -.8], null, [0, 0, 0]);
   for (const [s, z, r, w] of [[-1, .95, .38, .34], [1, .95, .38, .34], [-1, -.85, .46, .44], [1, -.85, .46, .44]]) carWheel(V, s * (z > 0 ? .8 : .86), r, z, r, w, VM.rimDark, z > 0, false, true);
   addFlames(V); return V;
 }
 function buildMuscle(paint) {
-  const V = { kind: 'muscle', g: new THREE.Group(), wheels: [], exhausts: [V3(-.42, .32, -2.0), V3(.42, .32, -2.0)], eye: V3(0, 1.1, -.08), tail: [V3(-.55, .7, -1.99), V3(.55, .7, -1.99)], showDriver: false };
+  const V = { paint, kind: 'muscle', g: new THREE.Group(), wheels: [], exhausts: [V3(-.42, .32, -2.0), V3(.42, .32, -2.0)], eye: V3(0, 1.1, -.08), tail: [V3(-.55, .7, -1.99), V3(.55, .7, -1.99)], showDriver: false };
   const g = V.g;
   part(box(1.86, .52, 3.9), paint, g, [0, .56, 0]);
   part(box(2.0, .08, .6), paint, g, [0, .26, 1.98]);
@@ -2022,6 +2092,15 @@ function buildMuscle(paint) {
     part(box(.08, .5, .25), paint, g, [s * .6, 1.14, -1.84]);
     part(box(.06, .42, .66), paint, g, [s * 1.0, 1.35, -1.9]);
   }
+  // grille with slats, chrome rings round the lamps, splitter, diffuser fins, hood pins, roof antenna
+  for (let k = 0; k < 4; k++) part(box(.44, .018, .02), VM.chrome, g, [0, .55 + k * .045, 1.99]);
+  for (const s of [-1, 1]) {
+    for (const x of [.36, .62]) part(new THREE.TorusGeometry(.078, .014, 6, 20), VM.chrome, g, [s * x, .64, 1.995]);
+    part(cylX(.025, .03, 8), VM.chrome, g, [s * .55, .91, 1.7]);
+  }
+  for (let k = -2; k <= 2; k++) part(box(.03, .12, .32), VM.trim, g, [k * .3, .3, -1.95]);
+  part(new THREE.CylinderGeometry(.008, .012, .6, 5), VM.trim, g, [-.35, 1.6, -.7], null, [-.35, 0, 0]);
+  carDetails(V, { w: 1.86, mirrorY: 1.0, mirrorZ: .55, doors: [.38, -.95], doorY: .72, doorH: .5, wiperY: .96, wiperZ: .66, wiperTilt: -.75, plateF: 1.98, plateR: -1.96, plateY: .42, fuelZ: -1.1 });
   for (const [s, z] of [[-1, 1.25], [1, 1.25], [-1, -1.25], [1, -1.25]]) carWheel(V, s * .9, .37, z, .37, .3, VM.rimLilac, z > 0, true);
   addFlames(V); return V;
 }

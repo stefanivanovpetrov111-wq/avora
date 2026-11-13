@@ -2318,7 +2318,7 @@ function placeAt(i) {
   P.idx = i; P.prevF = i / N; P.wrong = 0; P.off = false; P.slip = 0; P.accLong = 0; P.accLat = 0;
 }
 function resetRace() {
-  P.fallT = 0; P.hoops = 0; P.falls = 0; P.hoopF = null; P.dChain = 0; P.dMult = 1; P.dTime = 0; P.dIdle = 0; P.dTotal = 0;
+  P.spinT = 0; P.dizzyT = 0; P.fallT = 0; P.hoops = 0; P.falls = 0; P.hoopF = null; P.dChain = 0; P.dMult = 1; P.dTime = 0; P.dIdle = 0; P.dTotal = 0;
   placeAt(N - 26); P.x += TL[N - 26].x * -2.3; P.z += TL[N - 26].z * -2.3; P.prog = -26; P.rank = 4;
   P.cp = false; P.lap = 1; P.laps = []; camHead = P.head; raceCoins = 0; P.hits = 0; P.ultra = 0; P.jumps = 0; P.nitro = 0; P.nitroOn = false;
   resetRivals();
@@ -2361,6 +2361,15 @@ function rampAt(x, z) {
   }
   return null;
 }
+// a hard crash: the car bounces off, spins a full turn and the driver sees stars for a moment
+function crash(impact) {
+  if (P.spinT > 0 || state !== 'race') return;
+  P.spinT = .95; P.spinDir = Math.random() < .5 ? -1 : 1; P.dizzyT = 3.2;
+  if (P.drift) endDrift(false);
+  P.nitroOn = false; shake = 1;
+  blip(160, .25, 'triangle'); setTimeout(() => blip(980, .12, 'triangle'), 140); setTimeout(() => blip(1240, .12, 'triangle'), 300);
+  msg('Бум! Вие му се свят', 1.3, true);
+}
 function hit(impact, x, y, z) {
   if (impact < 1.5) return;
   if (impact > 4 && P.drift) endDrift(false);
@@ -2373,6 +2382,8 @@ function hit(impact, x, y, z) {
 
 function physics(dt, t, live) {
   const T = curT();
+  if (P.spinT > 0) { P.spinT -= dt; live = live && false; }
+  if (P.dizzyT > 0) P.dizzyT -= dt;
   const gas = live && keys.gas, brake = live && keys.brake;
   let target = live ? (keys.left ? 1 : 0) - (keys.right ? 1 : 0) : 0;
   if (live && padUsed && (padSteer || wheelOn) && !kb.left && !kb.right) target = padSteer;
@@ -2506,7 +2517,7 @@ function physics(dt, t, live) {
       }
       P.x += nx * pen; P.z += nz * pen;
       const vn = P.vx * nx + P.vz * nz;
-      if (vn < 0) { P.vx -= 1.35 * vn * nx; P.vz -= 1.35 * vn * nz; P.vx *= .8; P.vz *= .8; hit(-vn, cx - nx * .7, P.y, cz - nz * .7); P.yaw *= .3; }
+      if (vn < 0) { const hard = -vn > 6; P.vx -= (hard ? 1.7 : 1.35) * vn * nx; P.vz -= (hard ? 1.7 : 1.35) * vn * nz; P.vx *= .8; P.vz *= .8; hit(-vn, cx - nx * .7, P.y, cz - nz * .7); P.yaw *= .3; if (hard) crash(-vn); }
     }
   }
   info = trackInfo(P.x, P.z, P.idx); P.idx = info.i;
@@ -2515,7 +2526,7 @@ function physics(dt, t, live) {
     const side = info.lat > wl ? 1 : -1, over = side > 0 ? info.lat - wl : -info.lat - wr, l = TL[info.i];
     P.x -= l.x * side * over; P.z -= l.z * side * over;
     const vn = (P.vx * l.x + P.vz * l.z) * side;
-    if (vn > 0) { P.vx -= 1.3 * vn * l.x * side; P.vz -= 1.3 * vn * l.z * side; P.vx *= .9; P.vz *= .9; hit(vn, P.x + l.x * side, P.y, P.z + l.z * side); }
+    if (vn > 0) { const hard = vn > 6; P.vx -= (hard ? 1.7 : 1.3) * vn * l.x * side; P.vz -= (hard ? 1.7 : 1.3) * vn * l.z * side; P.vx *= .9; P.vz *= .9; hit(vn, P.x + l.x * side, P.y, P.z + l.z * side); if (hard) crash(vn); }
   }
 
   // height: the kart follows the ground, and leaves it when the ground falls away faster than gravity
@@ -2652,11 +2663,38 @@ function kartGlows() {
   for (; i < KG.n; i++) S1[i] = 0;
   KG.g.attributes.position.needsUpdate = KG.g.attributes.pcolor.needsUpdate = KG.g.attributes.psize.needsUpdate = true;
 }
+const STARS = (() => {
+  const sh = new THREE.Shape();
+  for (let k = 0; k < 10; k++) { const r = k % 2 ? .07 : .17, a = k / 10 * Math.PI * 2 + Math.PI / 2; k ? sh.lineTo(Math.cos(a) * r, Math.sin(a) * r) : sh.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: .05, bevelEnabled: false }); geo.center();
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffe04a });
+  const g = new THREE.Group(); g.visible = false; scene.add(g);
+  const list = []; for (let k = 0; k < 5; k++) { const m = new THREE.Mesh(geo, mat); g.add(m); list.push(m); }
+  return { g, list, mat };
+})();
+function updateStars(dt, t) {
+  const on = P.dizzyT > 0 && !(P.fallT > 0) && !(save.settings.cam === 'first' && (state === 'race' || state === 'done'));
+  STARS.g.visible = on; if (!on) return;
+  // above Зелчо's head when he is in view, otherwise above the roof
+  const v = K.veh || {}, top = v.showDriver ? (v.kind === 'formula' ? 1.5 : 1.3) : (v.kind === 'muscle' ? 1.75 : 1.85);
+  K.root.updateMatrixWorld(true);
+  K.body.localToWorld(tmp.set(0, top, v.seat ? v.seat.p.z : -.2));
+  STARS.g.position.copy(tmp);
+  const fade = Math.min(1, P.dizzyT / .5), r = .55 + .05 * Math.sin(t * 3);
+  STARS.list.forEach((m, k) => {
+    const a = t * 4.2 + k / STARS.list.length * Math.PI * 2;
+    m.position.set(Math.cos(a) * r, Math.sin(a * 2 + k) * .07, Math.sin(a) * r);
+    m.rotation.set(0, -a + t * 2, Math.sin(t * 5 + k) * .3); m.scale.setScalar(fade * (.9 + .2 * Math.sin(t * 8 + k)));
+  });
+  if (Math.random() < .25) emit(tmp.set(STARS.g.position.x + (Math.random() - .5), STARS.g.position.y + (Math.random() - .5) * .3, STARS.g.position.z + (Math.random() - .5)), 0, .4, 0, .4, .1, .5, 0xfff2a0, true, .9, 0);
+}
 function angLerp(a, b, k) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * k; }
 function visuals(dt, t) {
   const still = calm.matches, hov = !!K.veh.hover;
   K.root.position.set(P.x, P.y, P.z);
-  K.root.rotation.y = P.head;
+  const sp = P.spinT > 0 ? 1 - P.spinT / .95 : 0, se = sp < .5 ? 2 * sp * sp : 1 - Math.pow(-2 * sp + 2, 2) / 2;
+  K.root.rotation.y = P.head + (P.spinDir || 1) * se * Math.PI * 2;
+  updateStars(dt, t);
   K.root.rotation.x += ((P.air ? 0 : -Math.atan(P.slopeH + (rampAt(P.x, P.z) ? rampAt(P.x, P.z).slope : 0))) - K.root.rotation.x) * Math.min(1, dt * 10);
   blob.position.set(P.x, (P.gnd == null ? P.y : Math.min(P.gnd, P.y)) + .05, P.z); blob.rotation.z = P.head; blob.visible = !(P.fallT > 0);
   const fp = save.settings.cam === 'first' && (state === 'race' || state === 'count' || state === 'done');
@@ -2676,6 +2714,7 @@ function visuals(dt, t) {
   K.root.updateMatrixWorld(true);
   kartGlows();
   if (driver) driver.pose(t, P.drift ? P.drift * .55 + P.steer * .1 : P.steer * .42, 1, still);
+  if (driver) { const w = P.dizzyT > 0 ? Math.min(1, P.dizzyT) : 0; driver.body.rotation.z += Math.sin(t * 9) * .22 * w; driver.body.rotation.x = Math.sin(t * 6.5) * .12 * w; }
   if (costume) {
     costume.prop.rotation.y += dt * (6 + Math.abs(P.vf) * 1.2);
     costume.capeMesh.rotation.x = .12 + Math.min(1.1, Math.abs(P.vf) * .035) + (still ? 0 : Math.sin(t * 9) * .04 * Math.min(1, Math.abs(P.vf) / 10));

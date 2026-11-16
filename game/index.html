@@ -356,7 +356,7 @@ if (THREE.ColorManagement) THREE.ColorManagement.legacyMode = false;
 
 /* ---------- save ---------- */
 const SAVE_KEY = 'luna-liga-save';
-const save = { coins: 60, owned: [], equip: { hat: null, eyes: null, body: null }, kartColor: '#c4161c', zcolor: '#3aa548', wheels: 'slick', num: 7, track: 'base', best: {}, muted: false, done: {}, settings: {} };
+const save = { coins: 60, owned: [], equip: { hat: null, eyes: null, body: null }, kartColor: '#c4161c', zcolor: '#3aa548', wheels: 'slick', num: 7, track: 'star', best: {}, muted: false, done: {}, settings: {} };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (s && typeof s === 'object') Object.assign(save, s, { equip: Object.assign({ hat: null, eyes: null, body: null }, s.equip || {}) }); } catch (e) {}
 const DEF_BINDS = { gas: ['KeyW', 'ArrowUp'], brake: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], hop: ['Space'], boost: ['ShiftLeft', 'KeyE'], item: ['KeyF', 'KeyQ'], reset: ['KeyR'], cam: ['KeyC'], pause: ['KeyP', 'Escape'] };
 save.vehicle = save.vehicle || 'kart';
@@ -856,6 +856,13 @@ function buildDriver(K) {
 /* ================= tracks ================= */
 const N = 1400, LAPS = 3, G = 9;
 const TRACKS = {
+  star: {
+    name: 'Звездна магистрала', blurb: 'Светеща цветна писта в космоса без земя отдолу. Широка и бърза, но по правите няма огради: излезеш ли, падаш.',
+    theme: 'star', scale: 1, width: 14,
+    ctrl: [[0, -140], [70, -150], [130, -120], [150, -60], [110, -20], [60, -40], [20, -10], [40, 40], [100, 60], [140, 110], [90, 150], [20, 140], [-20, 100], [-70, 120], [-130, 140], [-160, 90], [-120, 50], [-150, 0], [-130, -60], [-80, -80], [-60, -130]],
+    pads: [180, 520, 900, 1250], ramps: [], fire: [], hills: [[250, 10, 90], [600, 15, 110], [950, 9, 80], [1200, 12, 90], [420, 3, 16], [780, 3, 16]], medal: [190, 215, 270], walls: [],
+    rocks: [], barrels: [], cones: [], movers: [], ice: [], stands: [], fans: [], bases: [], rocket: null, lamps: false
+  },
   pass: {
     name: 'Планински проход', blurb: 'Дневна писта за дрифт: серпентина от фиби нагоре през есенна гора и бързо спускане покрай скалите.',
     theme: 'mountain', scale: 1, width: 10,
@@ -916,12 +923,12 @@ function computeTrack(def) {
   for (let i = 0; i < N; i++) {
     const t0 = TT[(i - 6 + N) % N], t1 = TT[(i + 6) % N];
     const turn = t0.x * t1.z - t0.z * t1.x; // >0: turning one way
-    if (Math.abs(turn) > .09 && WALL_L[i] > 1e8) { if (turn > 0) WALL_L[i] = ROAD_W / 2 + 3.2; else WALL_R[i] = ROAD_W / 2 + 3.2; }
+    if (Math.abs(turn) > (def.theme === 'star' ? .06 : .09) && WALL_L[i] > 1e8) { const o = ROAD_W / 2 + (def.theme === 'star' ? .5 : 3.2); if (turn > 0) WALL_L[i] = o; else WALL_R[i] = o; }
   }
   // invisible limits: the pavement edge in the city, the fence line where fans stand
   LIM_L.fill(1e9); LIM_R.fill(1e9);
   if (def.theme === 'city') { LIM_L.fill(ROAD_W / 2 + 7.2); LIM_R.fill(ROAD_W / 2 + 7.2); }
-  MTN = def.theme === 'mountain'; CLIFF.fill(0);
+  MTN = def.theme === 'mountain'; STAR = def.theme === 'star'; CLIFF.fill(0);
   if (MTN) {
     LIM_L.fill(ROAD_W / 2 + 1.2); LIM_R.fill(ROAD_W / 2 + 1.2);
     let cx = 0, cz = 0; for (const p of TP) { cx += p.x / N; cz += p.z / N; }
@@ -1190,7 +1197,72 @@ function buildMountain(rr) {
 }
 
 const hemi = new THREE.HemisphereLight(0xc9d4ff, 0x3a3a40, .38); scene.add(hemi);
-skyMesh = makeSky();
+/* ================= the star highway ================= */
+// a glowing, tiled road of many colours floating in space: no ground, open edges on the straights,
+// light rails on the bends, ring gates, drifting crystals and planets
+let STAR = false, nebMesh = null;
+const starRoadTex = (() => {
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 1024; const g = cv.getContext('2d');
+  for (let y = 0; y < 1024; y++) { g.fillStyle = `hsl(${y / 1024 * 360}, 100%, 52%)`; g.fillRect(0, y, 256, 1); }
+  for (let r = 0; r < 16; r++) for (let c = 0; c < 4; c++) {
+    const x = c * 64, y = r * 64, gr = g.createLinearGradient(x, y, x + 64, y + 64);
+    gr.addColorStop(0, 'rgba(255,255,255,.22)'); gr.addColorStop(.5, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(0,0,60,.22)');
+    g.fillStyle = gr; g.fillRect(x + 2, y + 2, 60, 60);
+  }
+  g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 3;
+  for (let k = 0; k <= 16; k++) { g.beginPath(); g.moveTo(0, k * 64); g.lineTo(256, k * 64); g.stroke(); }
+  for (let k = 0; k <= 4; k++) { g.beginPath(); g.moveTo(k * 64, 0); g.lineTo(k * 64, 1024); g.stroke(); }
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; return t;
+})();
+const makeNebula = () => {
+  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 512; const g = cv.getContext('2d');
+  g.fillStyle = '#04030c'; g.fillRect(0, 0, 1024, 512);
+  for (let k = 0; k < 90; k++) {
+    const x = Math.random() * 1024, y = 60 + Math.random() * 380, r = 60 + Math.random() * 150, h = [265, 215, 320, 190][k % 4];
+    const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, `hsla(${h}, 90%, 55%, .16)`); rg.addColorStop(1, 'hsla(260, 90%, 30%, 0)');
+    for (const ox of [0, -1024, 1024]) { g.save(); g.translate(ox, 0); g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2); g.restore(); }
+  }
+  const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding;
+  const m = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), new THREE.MeshBasicMaterial({ map: t, side: THREE.BackSide, fog: false, depthWrite: false }));
+  m.renderOrder = -1; m.visible = false; scene.add(m); return m;
+};
+function buildStar(rr) {
+  const white = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }), gold = new THREE.MeshBasicMaterial({ color: 0xffe27a, side: THREE.DoubleSide });
+  // glowing edge strips all the way round, and a low light rail wherever a bend has a wall
+  ribbonGaps(world, ROAD_W / 2 + .4, ROAD_W / 2, .09, white, 10).receiveShadow = false;
+  ribbonGaps(world, -ROAD_W / 2, -ROAD_W / 2 - .4, .09, white, 10).receiveShadow = false;
+  for (const [side, arr] of [[1, WALL_L], [-1, WALL_R]]) {
+    let a = -1;
+    for (let i = 0; i <= N; i++) {
+      const on = i < N && arr[i] < 1e8;
+      if (on && a < 0) a = i;
+      if (!on && a >= 0) { const o = side * (ROAD_W / 2 + .45); for (const [y0, y1] of [[.35, .5], [.8, .95]]) ribbon(world, o, o, y0, gold, 6, a, i - 1, y1); a = -1; }
+      if (on && i % 6 === 0) { const v = onTrack(i, side * (ROAD_W / 2 + .45)); W.glows.push([v.x, v.y + .7, v.z, 1, .85, .4, 2.2, .4]); part(new THREE.BoxGeometry(.12, 1, .12), gold, world, [v.x, v.y + .5, v.z]); }
+    }
+  }
+  // ring gates over the road
+  const hues = [0xff4fa3, 0xffd23f, 0x5fe8a0, 0x4fb8ff, 0xb06bff];
+  for (let i = 70, n = 0; i < N; i += 110, n++) {
+    const g = group(world, [TP[i].x, TY[i], TP[i].z]); g.rotation.y = headingAt(i);
+    const c = new THREE.Color(hues[n % hues.length]);
+    part(new THREE.TorusGeometry(ROAD_W / 2 + 2.5, .3, 8, 48), new THREE.MeshBasicMaterial({ color: c }), g, [0, 2.4, 0]);
+    for (let q = 0; q < 10; q++) { const a = q / 10 * Math.PI * 2, R = ROAD_W / 2 + 2.5; W.glows.push([TP[i].x + TL[i].x * R * Math.cos(a), TY[i] + 2.4 + R * Math.sin(a), TP[i].z + TL[i].z * R * Math.cos(a), c.r, c.g, c.b, 4, .35]); }
+  }
+  // crystals and little stars drifting beside the road
+  const pts = [];
+  for (let n = 0; n < 140; n++) { const i = (rr() * N) | 0, s = rr() < .5 ? -1 : 1, v = onTrack(i, s * (ROAD_W / 2 + 6 + rr() * 40)); pts.push([v.x, v.y - 12 + rr() * 34, v.z, .5 + rr() * 1.6, hues[n % hues.length]]); }
+  const im = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: .35, roughness: .15, metalness: .3, flatShading: true }), pts.length), col = new THREE.Color();
+  pts.forEach(([x, y, z, s, c], j) => { _m4.compose(_v.set(x, y, z), _q.setFromEuler(_e.set(x, y, z)), _s.set(s, s * 1.6, s)); im.setMatrixAt(j, _m4); im.setColorAt(j, col.setHex(c)); }); _s.set(1, 1, 1);
+  fitBounds(im); world.add(im);
+  // planets
+  for (const [x, y, z, r, c, ring] of [[-260, 60, -330, 60, 0x6f5bd6, true], [330, -40, 120, 44, 0xe07a4a, false], [-120, 150, 380, 30, 0x4ac0d0, true]]) {
+    const pg = group(world, [x, y, z]);
+    part(new THREE.SphereGeometry(r, 40, 24), new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: .35, roughness: .9, fog: false }), pg);
+    if (ring) part(new THREE.RingGeometry(r * 1.35, r * 2, 64), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .35, side: THREE.DoubleSide, fog: false }), pg, null, null, [1.2, .3, 0]);
+  }
+}
+
+skyMesh = makeSky(); nebMesh = makeNebula();
 const sun = new THREE.DirectionalLight(0xfff4e6, 2.1);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 120 });
@@ -1200,6 +1272,7 @@ const rimL = new THREE.DirectionalLight(0x9cc2ff, 1.1); scene.add(rimL);
 const THEMES = {
   day:   { hemi: .38, sun: 2.1, sunCol: 0xfff4e6, sunDir: [24, 38, 18], rim: 1.1, ground: 0x7b7b81, expo: 1, earth: [-60, 55, -150], head: false },
   dusk:  { hemi: .26, sun: 2.4, sunCol: 0xffc995, sunDir: [40, 14, -10], rim: .8, ground: 0x857a70, expo: 1.05, earth: [80, 40, -150], head: false },
+  star: { hemi: .6, sun: 1.3, sunCol: 0xffffff, sunDir: [30, 60, 20], rim: .7, ground: 0x101020, expo: 1.05, earth: [-140, 30, -300], head: false, fog: 0x05030f, fogNear: 220, fogFar: 760, hemiSky: 0xc9b8ff, hemiGround: 0x5050b0 },
   mountain: { hemi: .62, sun: 2.3, sunCol: 0xfff0dc, sunDir: [60, 80, 40], rim: .35, ground: 0x5d6a3f, expo: 1.0, earth: [0, -500, 0], head: false, fog: 0xaab7c3, fogNear: 90, fogFar: 520, hemiSky: 0xbfd2ee, hemiGround: 0x4c5a34 },
   city:  { hemi: .24, sun: .5, sunCol: 0xb9a6ff, sunDir: [-20, 30, 30], rim: .6, ground: 0x2b2e3a, expo: 1.2, earth: [40, 95, -170], head: true, fog: 0x0b0820 },
   night: { hemi: .07, sun: .35, sunCol: 0x9db8ff, sunDir: [-20, 30, 30], rim: .25, ground: 0x5a5c63, expo: 1.15, earth: [-30, 70, 150], head: true }
@@ -1292,6 +1365,7 @@ function drawSign(text) {
 
 /* ================= world building ================= */
 const MAT = {
+  starRoad: new THREE.MeshStandardMaterial({ color: 0x8a8a8a, map: starRoadTex, emissive: 0xffffff, emissiveMap: starRoadTex, emissiveIntensity: .42, roughness: .6, metalness: 0, envMapIntensity: .15, side: THREE.DoubleSide }),
   road: new THREE.MeshStandardMaterial({ map: roadTex, normalMap: roadNormal, normalScale: new THREE.Vector2(.6, .6), roughnessMap: roadRough, roughness: 1, side: THREE.DoubleSide }),
   kerb: new THREE.MeshStandardMaterial({ map: kerbTex, roughness: .55, side: THREE.DoubleSide }),
   ground: new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: .97, normalMap: groundNormal, normalScale: new THREE.Vector2(.8, .8) }),
@@ -1432,13 +1506,13 @@ function raceDressing(rr) {
   for (const [i, side, len, rows] of TR.stands || []) grandstand(i, side, len, rows, rr);
   for (const [a, b, side] of TR.fans || []) fanLine(a, b, side, rr);
   const cols = [0xe8322a, 0x2f7bff, 0xf2c230, 0x3aa548, 0xf4f4f4, 0xff7a1a, 0x8657d6];
-  for (let i = N - 40; i <= N + 40; i += 10) for (const s of [-1, 1]) {
+  for (let i = N - 40; i <= (TR.theme === 'star' ? N - 41 : N + 40); i += 10) for (const s of [-1, 1]) {
     const k = ((i % N) + N) % N;
     const v = onTrack(k, s * (ROAD_W / 2 + 2)), g = group(world, [v.x, v.y, v.z]); g.rotation.y = headingAt(k);
     part(new THREE.CylinderGeometry(.04, .04, 4.4, 6), MAT.steel, g, [0, 2.2, 0]);
     part(new THREE.PlaneGeometry(1.3, .8), new THREE.MeshStandardMaterial({ color: cols[((i / 10) | 0) % cols.length], side: THREE.DoubleSide, roughness: .7 }), g, [0, 3.9, .7], null, [0, Math.PI / 2, 0]);
   }
-  if (TR.theme === 'mountain') return;
+  if (TR.theme === 'mountain' || TR.theme === 'star') return;
   const pl = group(world, [190, 150, 330]);
   part(new THREE.SphereGeometry(32, 40, 24), new THREE.MeshStandardMaterial({ color: 0xd9a066, emissive: 0x6b3f1c, emissiveIntensity: .6, roughness: .9, fog: false }), pl);
   part(new THREE.RingGeometry(42, 64, 64), new THREE.MeshBasicMaterial({ color: 0xe8cfa6, transparent: true, opacity: .55, side: THREE.DoubleSide, fog: false }), pl, null, null, [1.25, .3, 0]);
@@ -1677,10 +1751,11 @@ function buildWorld(id) {
   scene.fog.color.setHex(th.fog || 0x03040a); scene.background.setHex(th.fog || 0x03040a);
   scene.fog.near = th.fogNear || 120; scene.fog.far = th.fogFar || 300;
   hemi.color.setHex(th.hemiSky || 0xc9d4ff); hemi.groundColor.setHex(th.hemiGround || 0x3a3a40);
+  nebMesh.visible = STAR;
   const day = TR.theme === 'mountain'; skyMesh.visible = day; W.stars.visible = !day; W.earth.visible = W.glow.visible = !day;
 
   // ground with colour variation: dark crater floors, bright rims, flattened along the road
-  const seg = TR.theme === 'city' ? 150 : 220, gg = new THREE.PlaneGeometry(640, 640, seg, seg); gg.rotateX(-Math.PI / 2);
+  const seg = STAR ? 8 : TR.theme === 'city' ? 150 : 220, gg = new THREE.PlaneGeometry(640, 640, seg, seg); gg.rotateX(-Math.PI / 2);
   const p = gg.attributes.position, col = new Float32Array(p.count * 3), base = new THREE.Color(th.ground);
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i), d = coarseDist(x, z), h = terrainY(x, z, d, CN_I);
@@ -1696,21 +1771,21 @@ function buildWorld(id) {
   }
   gg.setAttribute('color', new THREE.BufferAttribute(col, 3));
   gg.computeVertexNormals();
-  const ground = new THREE.Mesh(gg, MAT.ground); ground.receiveShadow = true; world.add(ground);
+  const ground = new THREE.Mesh(gg, MAT.ground); ground.receiveShadow = true; if (!STAR) world.add(ground);
   MAT.far.color.setHex(th.ground).multiplyScalar(.8);
   const far = part(new THREE.RingGeometry(315, 1200, 64), MAT.far, world, [0, -.6, 0], null, [-Math.PI / 2, 0, 0]);
-  far.receiveShadow = false;
+  far.receiveShadow = false; far.visible = !STAR;
   const rr = (s => () => { s = (s * 16807) % 2147483647; return s / 2147483647; })(TR.name.length * 13);
-  for (let k = 0; k < (TR.theme === 'city' ? 0 : 46); k++) {
+  for (let k = 0; k < (TR.theme === 'city' || STAR ? 0 : 46); k++) {
     const a = k / 46 * Math.PI * 2 + rr() * .1, big = TR.theme === 'mountain', d = big ? 380 + rr() * 140 : 240 + rr() * 70, h = big ? 70 + rr() * 110 : 8 + rr() * 30;
     part(new THREE.ConeGeometry(big ? 60 + rr() * 70 : 18 + rr() * 30, h, 7, 1), MAT.far, world, [Math.cos(a) * d, h / 2 - 2, Math.sin(a) * d], null, [0, rr() * 3, 0]);
   }
 
   // road, kerbs, start line, gantry
-  ribbonGaps(world, ROAD_W / 2, -ROAD_W / 2, .04, MAT.road, 12);
+  ribbonGaps(world, ROAD_W / 2, -ROAD_W / 2, .04, STAR ? MAT.starRoad : MAT.road, STAR ? 48 : 12);
   MAT.road.map.repeat.set(1, 1);
-  ribbonGaps(world, ROAD_W / 2 + 1.1, ROAD_W / 2, .06, MAT.kerb, 3);
-  ribbonGaps(world, -ROAD_W / 2, -ROAD_W / 2 - 1.1, .06, MAT.kerb, 3);
+  if (!STAR) { ribbonGaps(world, ROAD_W / 2 + 1.1, ROAD_W / 2, .06, MAT.kerb, 3);
+  ribbonGaps(world, -ROAD_W / 2, -ROAD_W / 2 - 1.1, .06, MAT.kerb, 3); }
   const sl = group(world, [TP[0].x, .065, TP[0].z]); sl.rotation.y = headingAt(0);
   part(new THREE.PlaneGeometry(ROAD_W, 1.8), new THREE.MeshStandardMaterial({ map: checkTex, roughness: .7 }), sl, null, null, [-Math.PI / 2, 0, 0]).receiveShadow = true;
   for (const s of [-1, 1]) part(new THREE.BoxGeometry(.45, 5.6, .45), MAT.steel, sl, [s * (ROAD_W / 2 + 1.5), 2.8, 0]).castShadow = true;
@@ -1789,7 +1864,7 @@ function buildWorld(id) {
     W.ice.push({ x: v.x, z: v.z, r: r * 1.1 });
   }
   // lamps with light pools on the night side; a few on the day tracks
-  const every = TR.lamps ? 28 : MTN ? 1e9 : 80;
+  const every = TR.lamps ? 28 : MTN || STAR ? 1e9 : 80;
   const lampPos = [];
   for (let i = 10; i < N; i += every) lampPos.push([i, ((i / every) | 0) % 2 ? 1 : -1]);
   const poleGeo = new THREE.CylinderGeometry(.08, .12, 6, 10), armGeo = new THREE.BoxGeometry(.1, .1, 2), headGeo = new THREE.BoxGeometry(.5, .14, .8);
@@ -1825,6 +1900,7 @@ function buildWorld(id) {
   raceDressing(rr);
   if (TR.theme === 'city') buildCity(rr);
   if (MTN) buildMountain(rr);
+  if (STAR) buildStar(rr);
   for (const [x, z, r, s] of TR.bases) if (coarseDist(x, z) > 24) makeBase(world, x, z, r, s);
   const [rx, rz] = TR.rocket || [0, 0];
   if (TR.rocket && coarseDist(rx, rz) > 16) {
@@ -1836,7 +1912,7 @@ function buildWorld(id) {
     rk.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
   }
   const dg = new THREE.DodecahedronGeometry(1, 0);
-  for (let n = 0; n < (TR.theme === 'city' ? 0 : 260); n++) {
+  for (let n = 0; n < (TR.theme === 'city' || STAR ? 0 : 260); n++) {
     const a = rr() * 6.28, d = 6 + rr() * 170, x = Math.cos(a) * d, z = Math.sin(a) * d, cd = coarseDist(x, z);
     if (cd < ROAD_W / 2 + 4) continue;
     const s = .15 + rr() * (cd > 30 ? 1.5 : .5);
@@ -2453,7 +2529,7 @@ function rampAt(x, z) {
 }
 // a hard crash: the car bounces off, spins a full turn and the driver sees stars for a moment
 function crash(impact) {
-  if (P.spinT > 0 || P.lockT > 0 || state !== 'race') return;
+  if (P.spinT > 0 || P.lockT > 0 || P.cometT > 0 || state !== 'race') return;
   P.spinT = .95; P.lockT = 2; P.lockN = 0; P.spinDir = Math.random() < .5 ? -1 : 1; P.dizzyT = 3.2;
   if (P.drift) endDrift(false);
   P.nitroOn = false; shake = 1;
@@ -2473,6 +2549,11 @@ function physics(dt, t, live) {
   const T = curT();
   if (P.spinT > 0) P.spinT -= dt;
   // after a crash the driver needs two seconds to recover: no gas, brakes or steering
+  if (P.cometT > 0) { // the comet drives itself flat out along the road and cannot be stopped
+    P.cometT -= dt; const j = (P.idx + 14) % N; P.head = angLerp(P.head, Math.atan2(TP[j].x - P.x, TP[j].z - P.z), Math.min(1, dt * 9));
+    const ci = trackInfo(P.x, P.z, P.idx), over = Math.abs(ci.lat) - (ROAD_W / 2 - 1.6); if (over > 0) { const sg = Math.sign(ci.lat); P.x -= TL[ci.i].x * sg * over; P.z -= TL[ci.i].z * sg * over; }
+    const cv = T.vmax * 1.5; P.vx = Math.sin(P.head) * cv; P.vz = Math.cos(P.head) * cv; P.yaw = 0; if (P.drift) endDrift(false); live = false; P.lockT = 0; P.spinT = 0;
+  }
   if (P.lockT > 0) { P.lockT -= dt; live = false; const n = Math.ceil(P.lockT); if (n !== P.lockN && n > 0) { P.lockN = n; msg('Възстановяване… ' + n, 1.05, true); } if (P.lockT <= 0) { P.lockN = 0; msg('Давай!', .6, true); } }
   if (P.dizzyT > 0) P.dizzyT -= dt;
   const gas = live && keys.gas, brake = live && keys.brake;
@@ -2626,7 +2707,8 @@ function physics(dt, t, live) {
   // (crests and ramp tops); landing a hop with the button held starts a drift
   const ra = rampAt(P.x, P.z);
   const pit = pitAt(P.x, P.z);
-  const ground = pit ? pit.floor : groundAt(P.x, P.z, info) + (ra ? ra.h + .04 : 0);
+  let ground = pit ? pit.floor : groundAt(P.x, P.z, info) + (ra ? ra.h + .04 : 0);
+  if (STAR && Math.abs(info.lat) > ROAD_W / 2 + .75) ground = TY[info.i] - 60;
   P.gnd = ground;
   const yPrev = P.y, aPrev = P.hoopA;
   if (P.air) {
@@ -2660,6 +2742,7 @@ function physics(dt, t, live) {
     if (Math.abs(a) < 25) { P.hoopF = f; P.hoopA = a; }
   }
   // falling into the fire: a short pause, then back on the road before the ramp
+  if (STAR && P.y < TY[info.i] - 3.5 && !P.fallT) { P.fallT = 1; P.voidFall = true; P.falls++; blip(300, .5, 'sine'); msg('Падна в космоса!', 1.1); if (P.drift) endDrift(false); }
   if (pit && P.y < pit.y - 1.3 && !P.fallT) { P.fallT = 1.2; P.falls++; fireBurst(P.x, pit.y - 1, P.z); blip(80, .5, 'sawtooth'); msg('Падна в огъня!', 1.2); if (P.drift) endDrift(false); }
   if (info.dist > ROAD_W / 2 + 26) { const i = info.i; P.x += (TP[i].x - P.x) * .06; P.z += (TP[i].z - P.z) * .06; P.vx *= .97; P.vz *= .97; if (msgT <= 0) msg('Върни се на пистата', 1, true); }
   const f = P.idx / N;
@@ -2803,7 +2886,7 @@ function visuals(dt, t) {
   const wheelVis = P.drift ? -P.drift * .24 + P.steer * .14 : P.steer * .4;
   for (const w of K.veh.wheels) { (w.spin || w.sp).rotation.x = spin; if (w.front) (w.steer || w.st).rotation.y = wheelVis; }
   if (K.veh.sw) K.veh.sw.rotation.z = -wheelVis * 2.2;
-  const boosting = (P.boost > 0 || P.nitroOn) && state !== 'menu' && state !== 'garage';
+  const boosting = (P.boost > 0 || P.nitroOn || P.cometT > 0) && state !== 'menu' && state !== 'garage';
   setFlames(K.veh, boosting && !(P.fallT > 0), t); boostLight.intensity = boosting ? 2.2 + Math.random() * .8 : 0;
   K.root.updateMatrixWorld(true);
   kartGlows();
@@ -2899,7 +2982,7 @@ function visuals(dt, t) {
   sun.position.set(P.x + W.sunDir.x, W.sunDir.y, P.z + W.sunDir.z); sun.target.position.set(P.x, P.y, P.z);
   W.sunSprite.position.copy(camera.position).addScaledVector(W.sunDir.clone().normalize(), 240);
   W.stars.position.set(camera.position.x, 0, camera.position.z);
-  skyMesh.position.copy(camera.position);
+  skyMesh.position.copy(camera.position); nebMesh.position.copy(camera.position);
   for (const m of W.padMats) m.map.offset.y = (t * 1.2) % 1;
 }
 let hudLast = {}, miniN = 0;
@@ -3315,6 +3398,7 @@ function rivalsStep(dt, live) {
     }
     // contact with the player
     const dx = P.x - r.x, dz = P.z - r.z, d2 = dx * dx + dz * dz;
+    if (P.cometT > 0 && d2 < 6 && !(r.spinT > 0)) hitKart(r, r.x, r.y, r.z);
     if (d2 < 3.6 && Math.abs(P.y - r.y) < 1.2) {
       const d = Math.sqrt(d2) || .01, nx = dx / d, nz = dz / d, pen = 1.9 - d;
       P.x += nx * pen * .6; P.z += nz * pen * .6;
@@ -3334,7 +3418,7 @@ function rivalsStep(dt, live) {
 }
 
 /* ================= item boxes, power-ups, slipstream, music ================= */
-const ITEM_NAME = { rocket: 'Ракета', goo: 'Слуз', shield: 'Щит', magnet: 'Магнит', turbo: 'Турбо' };
+const ITEM_NAME = { rocket: 'Ракета', goo: 'Слуз', shield: 'Щит', magnet: 'Магнит', turbo: 'Турбо', comet: 'Комета' };
 const BOXES = [], PROJ = [];
 const qTex = (() => {
   const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
@@ -3372,15 +3456,15 @@ function buildItems() {
 }
 function rollItem(rank) {
   const tbl = rank <= 1 ? [['goo', 35], ['shield', 30], ['magnet', 25], ['rocket', 10]]
-    : rank >= RIV.length + 1 ? [['rocket', 40], ['turbo', 40], ['shield', 10], ['magnet', 10]]
-    : [['rocket', 30], ['goo', 20], ['shield', 15], ['magnet', 15], ['turbo', 20]];
+    : rank >= RIV.length + 1 ? [['rocket', 30], ['turbo', 30], ['comet', 26], ['shield', 7], ['magnet', 7]]
+    : [['rocket', 28], ['goo', 18], ['shield', 14], ['magnet', 14], ['turbo', 18], ['comet', 8]];
   let r = Math.random() * tbl.reduce((a, b) => a + b[1], 0);
   for (const [k, w] of tbl) { r -= w; if (r <= 0) return k; } return tbl[0][0];
 }
 function resetItems() {
   for (const p of PROJ) scene.remove(p.mesh); PROJ.length = 0;
   for (const b of BOXES) b.respawn = 0;
-  Object.assign(P, { item: null, rollT: 0, shieldT: 0, magnetT: 0, turbos: 0, draftT: 0, draftOn: false, lastRank: RIV.length + 1, overtakeT: 0 });
+  Object.assign(P, { cometT: 0, voidFall: false, item: null, rollT: 0, shieldT: 0, magnetT: 0, turbos: 0, draftT: 0, draftOn: false, lastRank: RIV.length + 1, overtakeT: 0 });
   for (const r of RIV) { r.item = null; r.useT = 0; r.spinT = 0; }
   for (const c of W.coins) if (c.x0 != null) { c.x = c.x0; c.z = c.z0; }
   shieldMesh.visible = magnetRing.visible = false;
@@ -3418,6 +3502,7 @@ function hitKart(k, x, y, z) {
   if (!k) return;
   if (k === P) {
     P.itemHits = (P.itemHits || 0) + 1;
+    if (P.cometT > 0) return;
     if (P.shieldT > 0) { P.shieldT = 0; msg('Щитът те спаси!', 1, true); blip(880, .2, 'triangle'); return; }
     P.vx *= .25; P.vz *= .25; crash(9);
   } else { k.spinT = 1.3; k.v *= .25; }
@@ -3445,6 +3530,7 @@ function itemsStep(dt, live) {
         if (it === 'rocket' || it === 'goo') fireItem(P, it);
         else if (it === 'shield') { P.shieldT = 8; blip(700, .3, 'sine'); }
         else if (it === 'magnet') { P.magnetT = 8; blip(500, .3, 'sine'); }
+        else if (it === 'comet') { P.cometT = 4; msg('Комета!', .9, true); blip(200, .6, 'sawtooth'); }
       }
     }
   }
@@ -3508,7 +3594,9 @@ function itemsFx(dt, t) {
     boxIM.setMatrixAt(j, _m4);
   });
   boxIM.instanceMatrix.needsUpdate = true;
-  shieldMesh.visible = P.shieldT > 0; if (shieldMesh.visible) { shieldMesh.position.set(P.x, P.y + .7, P.z); shieldMesh.scale.setScalar(1 + Math.sin(t * 8) * .04); IM.shield.opacity = P.shieldT < 2 && Math.sin(t * 20) > 0 ? .08 : .22; }
+  shieldMesh.visible = P.shieldT > 0 || P.cometT > 0; IM.shield.color.setHex(P.cometT > 0 ? 0xff8a2a : 0x5fe8ff);
+  if (P.cometT > 0 && !calm.matches) for (let q = 0; q < 3; q++) emit(tmp.set(P.x + (Math.random() - .5) * 1.5, P.y + .3 + Math.random() * 1.2, P.z + (Math.random() - .5) * 1.5), -Math.sin(P.head) * 10, 1, -Math.cos(P.head) * 10, .5, .7, 1.5, Math.random() < .5 ? 0xff6a1a : 0xffd27a, true, .9, 0);
+  if (shieldMesh.visible) { shieldMesh.position.set(P.x, P.y + .7, P.z); shieldMesh.scale.setScalar(1 + Math.sin(t * 8) * .04); IM.shield.opacity = P.shieldT < 2 && Math.sin(t * 20) > 0 ? .08 : .22; }
   magnetRing.visible = P.magnetT > 0; if (magnetRing.visible) { magnetRing.position.set(P.x, P.y + .3, P.z); const k = (t * 1.5) % 1; magnetRing.scale.setScalar(1 + k * 5); IM.ring.color.setHSL(.13, 1, .55); }
   if (P.draftOn && !calm.matches && Math.random() < .8) { K.root.localToWorld(tmp.set((Math.random() - .5) * 2.4, .4 + Math.random(), 2.5 + Math.random() * 2)); emit(tmp, -Math.sin(P.head) * 18, 0, -Math.cos(P.head) * 18, .25, .06, 3, 0xffffff, true, .6, 0); }
 }
@@ -3555,7 +3643,8 @@ function update(dt) {
   }
   if (P.fallT > 0 && (state === 'race' || state === 'done')) {
     P.fallT -= dt; P.vy -= G * dt; P.y += P.vy * dt; P.vx *= .97; P.vz *= .97; P.x += P.vx * dt; P.z += P.vz * dt;
-    if (P.fallT <= 0) { const f = FIRE.reduce((b, f) => Math.hypot(P.x - f.x, P.z - f.z) < Math.hypot(P.x - b.x, P.z - b.z) ? f : b, FIRE[0]); respawnBefore(f); }
+    if (P.fallT <= 0 && P.voidFall) { P.voidFall = false; respawnBefore({ respawn: (P.idx - 18 + N) % N }); }
+    else if (P.fallT <= 0) { const f = FIRE.reduce((b, f) => Math.hypot(P.x - f.x, P.z - f.z) < Math.hypot(P.x - b.x, P.z - b.z) ? f : b, FIRE[0]); respawnBefore(f); }
   } else if (state === 'race') physics(dt, t, true);
   else if (state === 'done' || state === 'end') physics(dt, t, false);
   if (state === 'race' || state === 'done' || state === 'end') { rivalsStep(dt, state === 'race'); itemsStep(dt, state === 'race'); }
@@ -3587,7 +3676,7 @@ function frame(now) {
   }
   requestAnimationFrame(frame);
 }
-if (!TRACKS[save.track]) save.track = 'pass'; buildWorld(save.track);
+if (!TRACKS[save.track]) save.track = 'star'; buildWorld(save.track);
 applyLook(); buildRivals(); resetRace(); applyQuality(); applyTouch(); toMenu();
 if (location.hash === '#debug') window.__td = { P, TP, TT, N, keys: kb, save, W, TY, RIV, renderer, scene, camera, perf: () => { const t0 = performance.now(); for (let k = 0; k < 20; k++) { update(1 / 60); visuals(1 / 60, clock); renderer.render(scene, camera); } renderer.getContext().finish(); return { ms: (performance.now() - t0) / 20, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, progs: renderer.info.programs.length }; }, get state() { return state; }, get coins() { return raceCoins; }, set snap(v) { camSnap = v; }, step(sec, fn) { for (let k = 0; k < sec * 60; k++) { if (fn) fn(); update(1 / 60); } } };
 requestAnimationFrame(frame);

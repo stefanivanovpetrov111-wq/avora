@@ -60,6 +60,11 @@ button { font-family: inherit; }
 .modes { display: flex; gap: 8px; }
 .modes .chip { flex: 1; }
 .modes .chip span { justify-content: center; width: 100%; box-sizing: border-box; }
+.islot { display: flex; align-items: center; gap: 8px; height: 38px; pointer-events: none; }
+.islot .ibox { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; font: 400 18px var(--display); color: #fff; background: var(--plate); border: 1px solid var(--line); }
+.islot.has .ibox, .islot.roll .ibox { background: linear-gradient(135deg, #ff5fd2, #7a6bff 55%, #35e6ff); border-color: transparent; box-shadow: 0 0 12px rgba(122,107,255,.7); }
+.islot.roll .ibox { animation: ibx .12s linear infinite; }
+.islot .iname { font: 400 13px var(--display); color: var(--fg); text-shadow: 0 1px 3px #000; }
 .pill.item { display: flex; flex-direction: row; flex-wrap: nowrap; flex-shrink: 0; align-items: center; min-width: 132px; }
 .pill.item .meta { white-space: nowrap; }
 .pill.item .ibox { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; font: 400 15px var(--display); color: #fff; background: linear-gradient(135deg, #ff5fd2, #7a6bff 55%, #35e6ff); opacity: .35; }
@@ -68,11 +73,11 @@ button { font-family: inherit; }
 @keyframes ibx { 50% { transform: scale(1.15) rotate(8deg); } }
 .touch .firebtn { position: absolute; right: 108px; bottom: 232px; width: 76px; height: 76px; border-radius: 50%; border: 2px solid #ff8a6a; background: radial-gradient(circle, rgba(255,90,60,.6), rgba(160,20,20,.45)); color: #fff; font: 400 14px var(--display); }
 .touch .itembtn { position: absolute; right: 214px; bottom: 196px; width: 72px; height: 72px; border-radius: 18px; border: 2px solid #b8a6ff; background: linear-gradient(135deg, rgba(255,95,210,.4), rgba(53,230,255,.4)); color: #fff; font: 400 12px var(--display); }
-.gauge { width: 110px; height: 110px; margin-top: -2px; }
-.gauge canvas { width: 110px; height: 110px; display: block; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
-@media (max-height: 430px), (max-width: 640px) { .gauge, .gauge canvas { width: 88px; height: 88px; } }
+.gauge { width: 92px; height: 92px; margin-top: -2px; }
+.gauge canvas { width: 92px; height: 92px; display: block; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
+@media (max-height: 430px), (max-width: 640px) { .gauge, .gauge canvas { width: 80px; height: 80px; } }
 .minimap { position: absolute; z-index: 2; top: 52px; left: max(12px, env(safe-area-inset-left, 0px)); pointer-events: none; }
-.minimap canvas { display: block; width: 118px; height: 118px; border-radius: 12px; background: var(--plate); border: 1px solid var(--line); }
+.minimap canvas { display: block; width: 96px; height: 96px; border-radius: 50%; background: rgba(9,12,20,.55); border: 1px solid var(--line); }
 .minimap p { margin: 3px 2px 0; display: flex; gap: 10px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
 .minimap p b { color: var(--gold); font-weight: 600; }
 #driftLive { position: absolute; z-index: 2; top: 10px; left: 50%; transform: translateX(-50%); margin: 0; pointer-events: none; white-space: nowrap;
@@ -83,7 +88,7 @@ button { font-family: inherit; }
 #speedfx { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0;
   background: repeating-conic-gradient(from var(--a, 0deg) at 50% 56%, rgba(255,255,255,0) 0deg 5deg, rgba(255,255,255,.26) 5.4deg 5.9deg, rgba(255,255,255,0) 6.3deg 11deg);
   -webkit-mask-image: radial-gradient(ellipse at 50% 56%, transparent 36%, #000 88%); mask-image: radial-gradient(ellipse at 50% 56%, transparent 36%, #000 88%); }
-@media (max-height: 430px), (max-width: 640px) { .minimap canvas { width: 92px; height: 92px; } .minimap { top: 50px; } }
+@media (max-height: 430px), (max-width: 640px) { .minimap canvas { width: 80px; height: 80px; } .minimap { top: 50px; } }
 button:focus-visible, .chip input:focus-visible + span, .track input:focus-visible + span, .sw input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 #msg { position: absolute; z-index: 2; left: 0; right: 0; top: 30%; margin: 0; text-align: center; pointer-events: none; padding-inline: 16px;
   font-family: var(--display); font-size: clamp(30px, 7vw, 64px); color: var(--fg); text-shadow: 0 3px 0 rgba(0,0,0,.5), 0 0 24px rgba(0,0,0,.6); }
@@ -95,15 +100,18 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
   font: 400 15px var(--display); touch-action: none; user-select: none; -webkit-user-select: none; }
 .touch button.big { width: 92px; height: 92px; background: var(--accent); color: var(--accent-ink); border: 0; }
 .touch button.on { filter: brightness(1.35); }
-.touch .arrow { width: 88px; height: 88px; border-radius: 20px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.38); display: grid; place-items: center; }
-.touch .arrow i { width: 44px; height: 50px; background: rgba(255,255,255,.72); }
+.touch .arrow { width: 78px; height: 78px; border-radius: 50%; background: rgba(9,12,20,.42); border: 1.5px solid rgba(255,255,255,.45); display: grid; place-items: center; }
+.touch .arrow i { width: 26px; height: 30px; background: rgba(255,255,255,.85); }
 .touch .arrow .tl { clip-path: polygon(100% 0, 100% 100%, 0 50%); }
 .touch .arrow .tr { clip-path: polygon(0 0, 0 100%, 100% 50%); }
-.touch .pedals { position: relative; align-items: flex-end; gap: 16px; }
-.touch .pedal { border-radius: 14px; border: 1px solid rgba(255,255,255,.45);
-  background: radial-gradient(circle, rgba(0,0,0,.42) 0 34%, transparent 36%) 0 0 / 24px 24px, rgba(255,255,255,.24); }
-.touch .pedal.brake { width: 116px; height: 78px; transform: perspective(260px) rotateX(20deg); }
-.touch .pedal.gas { width: 78px; height: 168px; transform: perspective(260px) rotateX(14deg) rotate(5deg); margin-right: 6px; }
+.touch .pedals { position: relative; align-items: flex-end; }
+.touch .pedal { border-radius: 16px; border: 1.5px solid rgba(255,255,255,.45); background: rgba(9,12,20,.42); }
+.touch .pedal::after { content: ''; display: block; margin: auto; width: 46%; height: 6px; border-radius: 3px; background: rgba(255,255,255,.55); }
+.touch .pedal.gas::after { background: #7dff9e; }
+.touch .pedal.brake::after { background: #ff7a6a; }
+.touch .pedal.brake { width: 72px; height: 96px; }
+.touch .pedal.gas { width: 78px; height: 150px; }
+.touch .pedals { gap: 10px; }
 .touch .tbtn { position: absolute; width: 58px; height: 58px; border-radius: 14px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.4); color: #fff; font: 400 22px var(--display); display: grid; place-items: center; }
 .touch .tbtn svg { width: 28px; height: 28px; }
 .touch .rgear { right: 6px; bottom: 186px; }
@@ -111,6 +119,11 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
 .touch .tcam { right: 6px; bottom: 254px; }
 .touch .hbrake { position: absolute; right: 96px; bottom: 150px; width: 104px; height: 66px; border-radius: 14px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.3); padding: 4px; }
 .touch .hbrake svg { width: 100%; height: 100%; }
+.touch .acts { display: grid; grid-template-columns: repeat(2, 58px); gap: 10px; margin-right: 6px; margin-bottom: 4px; }
+.touch .act { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; background: rgba(9,12,20,.42); border: 1.5px solid rgba(255,255,255,.45); color: #fff; font: 400 20px var(--display); padding: 0; }
+.touch .act svg { width: 26px; height: 26px; }
+.touch .act.fire { border-color: #ff8a6a; color: #ffb39e; }
+.touch .act.boost { border-color: #6fe3ff; color: #9ff0ff; background: conic-gradient(rgba(79,214,255,.4) var(--fill, 0%), rgba(9,12,20,.42) 0); }
 .touch .twheel { pointer-events: auto; width: 170px; height: 170px; touch-action: none; }
 .touch .twheel svg { width: 100%; height: 100%; }
 .touch button.on { background-color: rgba(255,138,61,.45); }
@@ -196,18 +209,17 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
   <div class="hud" id="hud" hidden>
     <div class="pill">
       <span class="pos"><span id="hPos">4</span><small id="hPosOf">/4</small></span>
-      <span class="meta"><span>обиколка <b id="hLap">1/3</b></span><b id="hTime">0:00.00</b></span>
+      <span class="meta"><span><b id="hLap">1/3</b> · ◎ <b id="hCoins">0</b></span><b id="hTime">0:00.00</b></span>
     </div>
-    <div class="pill wpn"><span class="meta"><b>Бластер</b><i class="hbar"><b id="hHeat"></b></i></span></div>
-    <div class="pill item" id="itemPill"><span class="ibox" id="hItemIcon">?</span><span class="meta"><b id="hItem">—</b><span id="hItemKey">F</span></span></div>
+    <div class="islot" id="itemPill" aria-label="Предмет"><span class="ibox" id="hItemIcon">?</span><span class="iname" id="hItem"></span><span id="hItemKey" hidden></span></div>
     <div class="spacer"></div>
-    <div class="gauge" aria-label="Скоростомер"><canvas id="gauge" width="220" height="220"></canvas><span id="hSpeed" hidden></span><i class="nbar" hidden><b id="hNitro"></b></i></div>
+    <div class="gauge" aria-label="Скоростомер"><canvas id="gauge" width="200" height="200"></canvas><span id="hSpeed" hidden></span><i class="nbar" hidden><b id="hNitro"></b></i><i hidden><b id="hHeat"></b></i></div>
     <button id="pauseBtn" type="button" aria-label="Пауза">II</button>
     <span id="hBest" hidden></span><span id="hGear" hidden></span>
   </div>
   <div class="minimap" id="miniBox" hidden>
     <canvas id="mini" width="236" height="236" aria-label="Карта на пистата със съперниците"></canvas>
-    <p><span>◎ <b id="hCoins">0</b></span><span id="fpsTile"><span id="hFps">60</span> FPS</span></p>
+    <p id="fpsTile"><span id="hFps">60</span> FPS</p>
   </div>
   <p id="driftLive" hidden></p>
   <div id="bossBar" hidden><span>Кралят на НЛО</span><i><b id="bossHp"></b></i></div>
@@ -222,14 +234,15 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
       <svg viewBox="0 0 100 100" id="tWheelSvg"><circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.75)" stroke-width="9"/><circle cx="50" cy="50" r="11" fill="rgba(255,255,255,.75)"/><path d="M50 50 L10 44 M50 50 L90 44 M50 50 L50 92" stroke="rgba(255,255,255,.75)" stroke-width="7" stroke-linecap="round"/><rect x="46" y="4" width="8" height="10" fill="#ff8a3d"/></svg>
     </div>
     <div class="grp pedals">
-      <button type="button" class="tbtn rgear" id="tRev" aria-label="Задна предавка" aria-pressed="false">R</button>
-      <button type="button" class="tbtn tcam" id="tCam" aria-label="Смяна на камерата"><svg viewBox="0 0 24 24"><path d="M4 7h3l2-2h6l2 2h3v12H4z M12 10a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
-      <button type="button" class="hbrake" data-k="hop" aria-label="Ръчна спирачка за дрифт"><svg viewBox="0 0 100 60"><path d="M6 10 L58 26 L70 44" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="74" cy="46" r="11" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="5"/></svg></button>
-      <button type="button" class="boostbtn" data-k="boost" id="tBoost">БУСТ</button>
-      <button type="button" class="itembtn" data-k="item">ПРЕДМЕТ</button>
-      <button type="button" class="firebtn" data-k="fire">ОГЪН</button>
+      <div class="acts">
+        <button type="button" class="act" data-k="item" aria-label="Предмет">?</button>
+        <button type="button" class="act fire" data-k="fire" aria-label="Стрелба"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+        <button type="button" class="act boost" data-k="boost" id="tBoost" aria-label="Буст"><svg viewBox="0 0 24 24"><path d="M13 2 5 14h6l-1 8 8-12h-6z" fill="currentColor"/></svg></button>
+        <button type="button" class="act" data-k="hop" aria-label="Ръчна спирачка за дрифт"><svg viewBox="0 0 24 24"><path d="M4 6l10 4 3 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18" cy="17.5" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+      </div>
       <button type="button" class="pedal brake" data-k="brake" aria-label="Спирачка"></button>
       <button type="button" class="pedal gas" data-k="gas" aria-label="Газ"></button>
+      <button type="button" id="tRev" hidden aria-pressed="false">R</button><button type="button" id="tCam" hidden>C</button>
     </div>
   </div>
 
@@ -3034,8 +3047,8 @@ function hud(t) {
   setText('hSpeed', String(Math.round(Math.abs(P.vf) * 3.4)));
   setText('hCoins', String(raceCoins));
   { const roll = P.rollT > 0, has = !!P.item || P.turbos > 0, pill = $('itemPill');
-    const nm = roll ? ITEM_NAME[Object.keys(ITEM_NAME)[Math.floor(clock * 14) % 5]] : P.turbos > 0 ? 'Турбо ×' + P.turbos : P.item ? ITEM_NAME[P.item] : P.shieldT > 0 ? 'Щит ' + Math.ceil(P.shieldT) : P.magnetT > 0 ? 'Магнит ' + Math.ceil(P.magnetT) : '—';
-    setText('hItem', nm); setText('hItemKey', has ? (save.settings.binds.item[0] || 'F').replace('Key', '') + ' за ползване' : 'вземи „?“');
+    const nm = roll ? '' : P.turbos > 0 ? 'Турбо ×' + P.turbos : P.item ? ITEM_NAME[P.item] : P.shieldT > 0 ? 'Щит ' + Math.ceil(P.shieldT) : P.magnetT > 0 ? 'Магнит ' + Math.ceil(P.magnetT) : '';
+    setText('hItem', nm); setText('hItemIcon', has || roll ? (P.turbos > 0 ? 'Т' : roll ? '?' : ITEM_NAME[P.item][0]) : '?');
     if (hudLast.ir !== roll) { hudLast.ir = roll; pill.classList.toggle('roll', roll); }
     if (hudLast.ih !== has) { hudLast.ih = has; pill.classList.toggle('has', has); } }
   setText('hPos', String(P.rank)); setText('hPosOf', '/' + (RIV.length + 1));
@@ -3057,32 +3070,22 @@ function hud(t) {
 /* ================= speedometer ================= */
 const gctx = $('gauge').getContext('2d');
 function drawGauge() {
-  const S = 220, c = S / 2, g = gctx, kmh = Math.abs(P.vf || 0) * 3.4, max = 140;
-  const a0 = Math.PI * .75, a1 = Math.PI * 2.25, ang = v => a0 + (a1 - a0) * Math.min(1, v / max);
+  const S = 200, c = S / 2, g = gctx, kmh = Math.abs(P.vf || 0) * 3.4, max = 140;
+  const a0 = Math.PI * .75, a1 = Math.PI * 2.25, span = a1 - a0;
   g.clearRect(0, 0, S, S);
-  g.beginPath(); g.arc(c, c, 104, 0, 7); g.fillStyle = 'rgba(9,12,20,.78)'; g.fill(); g.lineWidth = 2; g.strokeStyle = 'rgba(255,255,255,.18)'; g.stroke();
-  // boost ring
-  g.lineCap = 'round'; g.lineWidth = 7;
-  g.beginPath(); g.arc(c, c, 95, a0, a1); g.strokeStyle = 'rgba(255,255,255,.1)'; g.stroke();
-  if (P.nitro > 0) { g.beginPath(); g.arc(c, c, 95, a0, a0 + (a1 - a0) * P.nitro / 100); const gr = g.createLinearGradient(0, S, S, 0); gr.addColorStop(0, '#35e6ff'); gr.addColorStop(1, '#b06bff'); g.strokeStyle = gr; g.stroke(); }
-  // ticks and numbers
-  g.lineCap = 'butt';
-  for (let v = 0; v <= max; v += 10) {
-    const a = ang(v), big = v % 20 === 0, r1 = big ? 70 : 75;
-    g.beginPath(); g.moveTo(c + Math.cos(a) * r1, c + Math.sin(a) * r1); g.lineTo(c + Math.cos(a) * 83, c + Math.sin(a) * 83);
-    g.lineWidth = big ? 3 : 1.5; g.strokeStyle = v >= 120 ? '#ff5a4a' : 'rgba(238,241,247,.85)'; g.stroke();
-    if (big) { g.fillStyle = 'rgba(238,241,247,.75)'; g.font = '600 13px "Golos Text", system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(v, c + Math.cos(a) * 57, c + Math.sin(a) * 57); }
-  }
-  // needle
-  const a = ang(kmh);
-  g.beginPath(); g.moveTo(c - Math.cos(a) * 12, c - Math.sin(a) * 12); g.lineTo(c + Math.cos(a) * 80, c + Math.sin(a) * 80);
-  g.lineWidth = 4; g.strokeStyle = '#ff8a3d'; g.lineCap = 'round'; g.stroke();
-  g.beginPath(); g.arc(c, c, 9, 0, 7); g.fillStyle = '#ff8a3d'; g.fill();
-  // digital speed and gear
+  g.beginPath(); g.arc(c, c, 96, 0, 7); g.fillStyle = 'rgba(9,12,20,.72)'; g.fill();
+  g.lineCap = 'round';
+  // speed arc
+  g.lineWidth = 9; g.beginPath(); g.arc(c, c, 82, a0, a1); g.strokeStyle = 'rgba(255,255,255,.1)'; g.stroke();
+  g.beginPath(); g.arc(c, c, 82, a0, a0 + span * Math.min(1, kmh / max)); g.strokeStyle = '#eef1f7'; g.stroke();
+  // boost (blue) and blaster heat (orange) as thin rings
+  g.lineWidth = 4;
+  if (P.nitro > 0) { g.beginPath(); g.arc(c, c, 94, a0, a0 + span * P.nitro / 100); g.strokeStyle = '#4fd6ff'; g.stroke(); }
+  if (P.heat > 1) { g.beginPath(); g.arc(c, c, 69, a0, a0 + span * P.heat / 100); g.strokeStyle = P.overheat ? '#ff2a2a' : '#ffae3a'; g.stroke(); }
   const gear = P.rev || P.vf < -.5 ? 'R' : Math.abs(P.vf || 0) < .3 && !keys.gas ? 'N' : String(P.gear || 1);
-  g.fillStyle = '#eef1f7'; g.font = '400 36px "Russo One", "Arial Black", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillText(Math.round(kmh), c, c + 52);
-  g.fillStyle = 'rgba(238,241,247,.6)'; g.font = '600 12px "Golos Text", system-ui, sans-serif'; g.fillText('км/ч', c, c + 70);
-  g.fillStyle = gear === 'R' ? '#ff5a4a' : '#ffd23f'; g.font = '400 22px "Russo One", "Arial Black", sans-serif'; g.fillText(gear, c, c - 22);
+  g.fillStyle = '#eef1f7'; g.font = '400 46px "Russo One", "Arial Black", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(Math.round(kmh), c, c + 2);
+  g.fillStyle = 'rgba(238,241,247,.55)'; g.font = '600 14px "Golos Text", system-ui, sans-serif'; g.fillText('км/ч', c, c + 34);
+  g.fillStyle = gear === 'R' ? '#ff5a4a' : '#ffd23f'; g.font = '400 20px "Russo One", "Arial Black", sans-serif'; g.fillText(gear, c, c - 36);
 }
 
 /* ================= minimap ================= */
@@ -3892,7 +3895,6 @@ function combatFx(dt, t) {
     BOSS.beam.material.opacity = .06 + Math.sin(t * 3) * .03;
     $('bossHp').style.width = (BOSS.hp / BOSS.max * 100).toFixed(1) + '%';
   }
-  const hb = $('hHeat'); hb.style.width = Math.round(P.heat || 0) + '%'; hb.classList.toggle('hot', !!P.overheat);
 }
 
 /* ================= main loop ================= */

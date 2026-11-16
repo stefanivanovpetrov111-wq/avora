@@ -49,12 +49,24 @@ button { font-family: inherit; }
   background: conic-gradient(rgba(111,227,255,.55) var(--fill, 0%), rgba(255,255,255,.08) 0); color: #eaffff; font: 400 15px var(--display); }
 .spacer { flex: 1; }
 .hud button { pointer-events: auto; width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--plate); color: var(--fg); font: 400 13px var(--display); cursor: pointer; }
+.pill.wpn { min-width: 86px; }
+.hbar { display: block; width: 66px; height: 5px; margin-top: 4px; border-radius: 3px; background: rgba(255,255,255,.14); overflow: hidden; }
+.hbar b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ffd23f, #ff5a3a); }
+.hbar b.hot { background: #ff2a2a; animation: hot .25s steps(2) infinite; }
+@keyframes hot { 50% { opacity: .3; } }
+#bossBar { position: absolute; z-index: 2; top: 54px; left: 50%; transform: translateX(-50%); width: min(340px, 60vw); pointer-events: none; text-align: center; font: 400 13px var(--display); color: #ffd6e0; text-shadow: 0 1px 3px #000; }
+#bossBar i { display: block; height: 10px; margin-top: 4px; border-radius: 6px; background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.3); overflow: hidden; }
+#bossBar b { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff2a5a, #ff9a3a); transition: width .1s; }
+.modes { display: flex; gap: 8px; }
+.modes .chip { flex: 1; }
+.modes .chip span { justify-content: center; width: 100%; box-sizing: border-box; }
 .pill.item { display: flex; flex-direction: row; flex-wrap: nowrap; flex-shrink: 0; align-items: center; min-width: 132px; }
 .pill.item .meta { white-space: nowrap; }
 .pill.item .ibox { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; font: 400 15px var(--display); color: #fff; background: linear-gradient(135deg, #ff5fd2, #7a6bff 55%, #35e6ff); opacity: .35; }
 .pill.item.has .ibox { opacity: 1; box-shadow: 0 0 12px rgba(122,107,255,.8); }
 .pill.item.roll .ibox { animation: ibx .12s linear infinite; opacity: 1; }
 @keyframes ibx { 50% { transform: scale(1.15) rotate(8deg); } }
+.touch .firebtn { position: absolute; right: 108px; bottom: 232px; width: 76px; height: 76px; border-radius: 50%; border: 2px solid #ff8a6a; background: radial-gradient(circle, rgba(255,90,60,.6), rgba(160,20,20,.45)); color: #fff; font: 400 14px var(--display); }
 .touch .itembtn { position: absolute; right: 214px; bottom: 196px; width: 72px; height: 72px; border-radius: 18px; border: 2px solid #b8a6ff; background: linear-gradient(135deg, rgba(255,95,210,.4), rgba(53,230,255,.4)); color: #fff; font: 400 12px var(--display); }
 .gauge { width: 110px; height: 110px; margin-top: -2px; }
 .gauge canvas { width: 110px; height: 110px; display: block; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
@@ -97,7 +109,7 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
 .touch .rgear { right: 6px; bottom: 186px; }
 .touch .rgear[aria-pressed="true"] { background: rgba(255,90,74,.6); border-color: #ff5a4a; }
 .touch .tcam { right: 6px; bottom: 254px; }
-.touch .hbrake { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); bottom: 150px; right: auto; width: 104px; height: 66px; border-radius: 14px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.3); padding: 4px; }
+.touch .hbrake { position: absolute; right: 96px; bottom: 150px; width: 104px; height: 66px; border-radius: 14px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.3); padding: 4px; }
 .touch .hbrake svg { width: 100%; height: 100%; }
 .touch .twheel { pointer-events: auto; width: 170px; height: 170px; touch-action: none; }
 .touch .twheel svg { width: 100%; height: 100%; }
@@ -186,6 +198,7 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
       <span class="pos"><span id="hPos">4</span><small id="hPosOf">/4</small></span>
       <span class="meta"><span>обиколка <b id="hLap">1/3</b></span><b id="hTime">0:00.00</b></span>
     </div>
+    <div class="pill wpn"><span class="meta"><b>Бластер</b><i class="hbar"><b id="hHeat"></b></i></span></div>
     <div class="pill item" id="itemPill"><span class="ibox" id="hItemIcon">?</span><span class="meta"><b id="hItem">—</b><span id="hItemKey">F</span></span></div>
     <div class="spacer"></div>
     <div class="gauge" aria-label="Скоростомер"><canvas id="gauge" width="220" height="220"></canvas><span id="hSpeed" hidden></span><i class="nbar" hidden><b id="hNitro"></b></i></div>
@@ -197,6 +210,7 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
     <p><span>◎ <b id="hCoins">0</b></span><span id="fpsTile"><span id="hFps">60</span> FPS</span></p>
   </div>
   <p id="driftLive" hidden></p>
+  <div id="bossBar" hidden><span>Кралят на НЛО</span><i><b id="bossHp"></b></i></div>
   <p id="msg"></p>
 
   <div class="touch" id="touch">
@@ -213,6 +227,7 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
       <button type="button" class="hbrake" data-k="hop" aria-label="Ръчна спирачка за дрифт"><svg viewBox="0 0 100 60"><path d="M6 10 L58 26 L70 44" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="74" cy="46" r="11" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="5"/></svg></button>
       <button type="button" class="boostbtn" data-k="boost" id="tBoost">БУСТ</button>
       <button type="button" class="itembtn" data-k="item">ПРЕДМЕТ</button>
+      <button type="button" class="firebtn" data-k="fire">ОГЪН</button>
       <button type="button" class="pedal brake" data-k="brake" aria-label="Спирачка"></button>
       <button type="button" class="pedal gas" data-k="gas" aria-label="Газ"></button>
     </div>
@@ -225,11 +240,16 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
         <div class="purse" id="mCoins" aria-label="Монети">◎ 0</div>
       </div>
       <div class="tracks" id="trackList" role="radiogroup" aria-label="Писта"></div>
+      <div class="chips modes" role="radiogroup" aria-label="Режим">
+        <label class="chip"><input type="radio" name="mode" id="m-race" value="race"><span>Състезание</span></label>
+        <label class="chip"><input type="radio" name="mode" id="m-boss" value="boss"><span>Бос битка</span></label>
+      </div>
       <dl class="keys-help">
         <dt>W ↑ / S ↓</dt><dd>газ / спирачка и назад</dd>
         <dt>A D ← →</dt><dd>завой; на висока скорост завива по-малко</dd>
         <dt>Интервал</dt><dd>скок; задръж и завий за дрифт. Дрифтът пълни лентата „Буст“</dd>
         <dt>Shift · E</dt><dd>буст, докато лентата не свърши</dd>
+        <dt>X · J</dt><dd>стрелба с бластера; целта се хваща сама, внимавай да не прегрее</dd>
         <dt>F · Q</dt><dd>предмет от кутиите „?“: ракета, слуз, щит, магнит, турбо</dd>
         <dt>R · P · C</dt><dd>обратно на пистата · пауза · смяна на камерата</dd>
         <dt>Геймпад, волан</dt><dd>работят; клавишите и воланът се настройват в „Настройки“</dd>
@@ -365,7 +385,7 @@ if (THREE.ColorManagement) THREE.ColorManagement.legacyMode = false;
 const SAVE_KEY = 'luna-liga-save';
 const save = { coins: 60, owned: [], equip: { hat: null, eyes: null, body: null }, kartColor: '#c4161c', zcolor: '#3aa548', wheels: 'slick', num: 7, track: 'star', best: {}, muted: false, done: {}, settings: {} };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (s && typeof s === 'object') Object.assign(save, s, { equip: Object.assign({ hat: null, eyes: null, body: null }, s.equip || {}) }); } catch (e) {}
-const DEF_BINDS = { gas: ['KeyW', 'ArrowUp'], brake: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], hop: ['Space'], boost: ['ShiftLeft', 'KeyE'], item: ['KeyF', 'KeyQ'], reset: ['KeyR'], cam: ['KeyC'], pause: ['KeyP', 'Escape'] };
+const DEF_BINDS = { gas: ['KeyW', 'ArrowUp'], brake: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], hop: ['Space'], boost: ['ShiftLeft', 'KeyE'], item: ['KeyF', 'KeyQ'], fire: ['KeyX', 'KeyJ'], reset: ['KeyR'], cam: ['KeyC'], pause: ['KeyP', 'Escape'] };
 save.vehicle = save.vehicle || 'kart';
 save.settings = Object.assign({ quality: 'auto', fps: true, cam: 'chase', device: 'keys', ts: 'arrows', tsAlways: false, rivals: 'normal' }, save.settings || {});
 if (save.settings.binds && !save.settings.binds.boost && save.settings.binds.hop) save.settings.binds.hop = save.settings.binds.hop.filter(c => c !== 'ShiftLeft' && c !== 'KeyE');
@@ -2414,9 +2434,9 @@ $('muteBtn').addEventListener('click', () => setMute(!save.muted));
 setMute(save.muted);
 
 /* ================= input ================= */
-const keys = { gas: false, brake: false, left: false, right: false, hop: false, boost: false, item: false };
+const keys = { gas: false, brake: false, left: false, right: false, hop: false, boost: false, item: false, fire: false };
 let itemPressed = false, hopPressed = false, padSteer = 0, padUsed = false, padHop = false;
-const kb = { gas: false, brake: false, left: false, right: false, hop: false, boost: false, item: false }, pd = { gas: false, brake: false, left: false, right: false, hop: false, boost: false, item: false };
+const kb = { gas: false, brake: false, left: false, right: false, hop: false, boost: false, item: false, fire: false }, pd = { gas: false, brake: false, left: false, right: false, hop: false, boost: false, item: false, fire: false };
 let rebinding = null, wheelOn = false;
 const actionFor = code => { const b = save.settings.binds; for (const a in b) if (b[a].includes(code)) return a; return null; };
 function press(k, on) { if (k in kb) kb[k] = on; }
@@ -2470,11 +2490,11 @@ function readPad() {
       padSteer = Math.max(-1, Math.min(1, st)); wheelOn = true; padUsed = true;
       pd.gas = Math.max(ped(w.gas, w.gasRest), btn(7)) > .1; pd.brake = Math.max(ped(w.brake, w.brakeRest), btn(6)) > .1;
       pd.hop = w.drift >= 0 ? btn(w.drift) > .5 : (btn(0) > .5 || btn(4) > .5 || btn(5) > .5);
-      pd.boost = w.boost >= 0 ? btn(w.boost) > .5 : btn(2) > .5; pd.item = btn(3) > .5;
+      pd.boost = w.boost >= 0 ? btn(w.boost) > .5 : btn(2) > .5; pd.item = btn(3) > .5; pd.fire = btn(1) > .5;
     } else {
       const a = gp.axes[0] || 0;
       padSteer = Math.abs(a) > .12 ? -a : 0;
-      pd.gas = btn(7) > .1 || btn(0) > .5; pd.brake = btn(6) > .1 || btn(1) > .5; pd.hop = btn(5) > .5 || btn(4) > .5; pd.boost = btn(2) > .5; pd.item = btn(3) > .5;
+      pd.gas = btn(7) > .1 || btn(0) > .5; pd.brake = btn(6) > .1 || btn(1) > .5; pd.hop = btn(5) > .5; pd.fire = btn(4) > .5; pd.boost = btn(2) > .5; pd.item = btn(3) > .5;
       padUsed = pd.gas || pd.brake || pd.hop || pd.boost || !!padSteer || padUsed;
       if (btn(9) > .5 && state === 'race') pause();
     }
@@ -2830,7 +2850,7 @@ function moveWorld(dt, t) {
     if (s < .05) o.knocked = 0;
   }
   placeCoins(t);
-  itemsFx(dt, t);
+  itemsFx(dt, t); combatFx(dt, t);
   fireFx(dt, t);
 }
 
@@ -3104,6 +3124,7 @@ function drawMini() {
 /* ================= menus ================= */
 function showOnly(id) { for (const x of ['menuCard', 'pauseCard', 'endCard', 'setCard']) $(x).hidden = x !== id; }
 function renderTracks() {
+  $('m-' + (save.mode === 'boss' ? 'boss' : 'race')).checked = true;
   const box = $('trackList'); box.textContent = '';
   for (const [id, d] of Object.entries(TRACKS)) {
     const l = document.createElement('label'); l.className = 'track';
@@ -3119,7 +3140,7 @@ function renderTracks() {
 }
 function updatePurse() { $('mCoins').textContent = '◎ ' + save.coins; $('gCoins').textContent = '◎ ' + save.coins; }
 function toMenu() {
-  state = 'menu'; showOnly('menuCard'); $('hud').hidden = true; $('miniBox').hidden = true; $('driftLive').hidden = true; $('stage').classList.remove('racing'); $('garage').hidden = true;
+  state = 'menu'; showOnly('menuCard'); $('hud').hidden = true; $('bossBar').hidden = true; $('miniBox').hidden = true; $('driftLive').hidden = true; $('stage').classList.remove('racing'); $('garage').hidden = true;
   resetRace(); renderTracks(); updatePurse(); $('hBest').textContent = fmt(save.best[bestKey()]);
 }
 function startCountdown() {
@@ -3144,6 +3165,7 @@ function showEnd() {
   if (P.dChain > 0) { P.dTotal += Math.round(P.dChain * P.dMult); P.dChain = 0; }
   if (P.dTotal) { rows.push(['Дрифт точки ' + P.dTotal.toLocaleString('bg-BG'), Math.floor(P.dTotal / 3000)]); save.bestDrift = save.bestDrift || {}; if (!save.bestDrift[save.track] || P.dTotal > save.bestDrift[save.track]) { save.bestDrift[save.track] = P.dTotal; rows.push(['Рекорд по дрифт!', 20]); } }
   if (P.rank === 1 && P.endRank === 1) rows.push(['Победа!', 30]);
+  if (BOSS.on) { if (BOSS.dead) rows.push(['Победи Краля на НЛО', 100]); else rows.push(['Босът остана с ' + Math.ceil(BOSS.hp / BOSS.max * 100) + '% живот', 0]); if (P.bossDmg) rows.push(['Твоите попадения в боса', Math.round(P.bossDmg / 6)]); }
   if (P.hoops) rows.push(['Огнени обръчи × ' + P.hoops, P.hoops * 5]);
   if (P.jumps) rows.push(['Големи скокове × ' + P.jumps, P.jumps * 2]);
   if (first) rows.push(['Първи финал на тази писта', 40]);
@@ -3167,7 +3189,7 @@ function showEnd() {
 /* settings */
 let setFrom = 'menuCard', detectIv = 0;
 const KEYNAME = c => c.replace('Key', '').replace('Digit', '').replace('Arrow', 'Стрелка ').replace('Up', 'нагоре').replace('Down', 'надолу').replace('Left', 'наляво').replace('Right', 'надясно').replace('Space', 'Интервал').replace('Escape', 'Esc').replace('Shiftналяво', 'ляв Shift').replace('Shiftнадясно', 'десен Shift');
-const ACTNAME = { gas: 'Газ', brake: 'Спирачка и назад', left: 'Наляво', right: 'Надясно', hop: 'Скок и дрифт', boost: 'Буст', item: 'Предмет', reset: 'Обратно на пистата', cam: 'Смяна на камерата', pause: 'Пауза' };
+const ACTNAME = { gas: 'Газ', brake: 'Спирачка и назад', left: 'Наляво', right: 'Надясно', hop: 'Скок и дрифт', boost: 'Буст', item: 'Предмет', fire: 'Стрелба', reset: 'Обратно на пистата', cam: 'Смяна на камерата', pause: 'Пауза' };
 function renderSettings() {
   const S = save.settings;
   $('rv-' + (S.rivals || 'normal')).checked = true;
@@ -3217,6 +3239,7 @@ for (const k of ['steer', 'gas', 'brake', 'drift', 'boost']) $('det-' + k).addEv
 $('sens').addEventListener('input', e => { save.settings.wheel.sens = +e.target.value; persist(); });
 $('wInv').addEventListener('change', e => { save.settings.wheel.inv = e.target.checked; persist(); });
 
+document.querySelectorAll('input[name="mode"]').forEach(i => i.addEventListener('change', () => { save.mode = i.value; persist(); resetRace(); }));
 $('go').addEventListener('click', startCountdown);
 $('again').addEventListener('click', startCountdown);
 $('endMenu').addEventListener('click', toMenu);
@@ -3319,7 +3342,7 @@ function buildRivals() {
   RIVAL_DEF.forEach((d, n) => {
     const kind = ['muscle', 'rally', 'formula'][n], paint = M.paint.clone(); paint.color.setHex(kind === 'rally' ? 0xeceff3 : d.col);
     const acc = new THREE.MeshStandardMaterial({ color: d.col, roughness: .55, flatShading: true });
-    const V = buildVehicle(kind, paint, acc), g = V.g;
+    const V = buildVehicle(kind, paint, acc), g = V.g; addGun(V, kind);
     if (V.seat) { // a helmeted driver in the open car
       const y = V.seat.p.y, z = V.seat.p.z;
       part(SPH, new THREE.MeshPhysicalMaterial({ color: d.helm, roughness: .2, clearcoat: 1 }), g, [0, y + .66, z], [.25, .25, .27]).castShadow = true;
@@ -3513,6 +3536,7 @@ function rollItem(rank) {
   for (const [k, w] of tbl) { r -= w; if (r <= 0) return k; } return tbl[0][0];
 }
 function resetItems() {
+  resetCombat();
   for (const p of PROJ) scene.remove(p.mesh); PROJ.length = 0;
   for (const b of BOXES) b.respawn = 0;
   P.rev = false; $('tRev').setAttribute('aria-pressed', 'false');
@@ -3680,6 +3704,197 @@ function confetti() {
   for (let q = 0; q < 120; q++) emit(tmp.set(P.x + (Math.random() - .5) * 3, P.y + 2.5, P.z + (Math.random() - .5) * 3), (Math.random() - .5) * 10, 4 + Math.random() * 7, (Math.random() - .5) * 10, 1.8, .14, .2, [0xff4fa3, 0xffd23f, 0x5fe8a0, 0x4fb8ff, 0xb06bff, 0xff8a3d][q % 6], false, 1, -9);
 }
 
+/* ================= weapons and the boss ================= */
+// every car carries a twin blaster that aims itself at the boss or the nearest kart ahead.
+// In boss mode a giant flying saucer leads the race, bombs the road and fires orbs; shoot it down.
+const GUN_AT = { kart: [0, .62, .62], rally: [0, 1.46, -.25], formula: [0, 1.02, .72], muscle: [0, 1.4, -.45] };
+const WM = {
+  gun: new THREE.MeshStandardMaterial({ color: 0x30343c, roughness: .35, metalness: .85 }),
+  tip: new THREE.MeshBasicMaterial({ color: 0x6ff0ff }),
+  boltP: new THREE.MeshBasicMaterial({ color: 0x6ff0ff, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false }),
+  boltR: new THREE.MeshBasicMaterial({ color: 0xff9a3a, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false }),
+  boltB: new THREE.MeshBasicMaterial({ color: 0xff3a6a, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false }),
+  ring: new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })
+};
+function addGun(V, kind) {
+  const at = GUN_AT[kind] || GUN_AT.kart, g = group(V.g, at), yaw = group(g);
+  part(new THREE.CylinderGeometry(.13, .16, .1, 14), WM.gun, g, [0, .02, 0]);
+  part(new THREE.BoxGeometry(.32, .16, .28), WM.gun, yaw, [0, .14, 0]);
+  const tips = [];
+  for (const s of [-1, 1]) {
+    part(new THREE.CylinderGeometry(.035, .035, .55, 10), WM.gun, yaw, [s * .1, .15, .38], null, [Math.PI / 2, 0, 0]);
+    part(new THREE.TorusGeometry(.04, .012, 6, 12), WM.tip, yaw, [s * .1, .15, .66]);
+    tips.push(group(yaw, [s * .1, .15, .7]));
+  }
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  V.gun = { g, yaw, tips, side: 0 };
+}
+const BOLTS = [], BOLT_GEO = new THREE.CylinderGeometry(.05, .05, 1.3, 6); BOLT_GEO.rotateX(Math.PI / 2);
+const _up = new THREE.Vector3(0, 0, 1);
+function shoot(V, from, target, owner, spread) {
+  const tip = V.gun.tips[V.gun.side ^= 1]; tip.getWorldPosition(tmp);
+  const dir = V3(0, 0, 0);
+  if (target) { const d = Math.hypot(target.x - tmp.x, target.z - tmp.z), lead = d / 75; dir.set(target.x + (target.vx || 0) * lead - tmp.x, target.y - tmp.y, target.z + (target.vz || 0) * lead - tmp.z); }
+  else dir.set(Math.sin(from.head), 0, Math.cos(from.head));
+  dir.normalize(); if (spread) { dir.x += (Math.random() - .5) * spread; dir.y += (Math.random() - .5) * spread * .5; dir.z += (Math.random() - .5) * spread; dir.normalize(); }
+  const m = new THREE.Mesh(BOLT_GEO, owner === P ? WM.boltP : WM.boltR); m.position.copy(tmp); m.quaternion.setFromUnitVectors(_up, dir); scene.add(m);
+  BOLTS.push({ m, v: dir.multiplyScalar(75), life: 1.6, owner });
+  if (Math.hypot(tmp.x - camera.position.x, tmp.z - camera.position.z) < 50) emit(tmp, 0, 0, 0, .08, .35, 1, owner === P ? 0x9ff6ff : 0xffc27a, true, 1, 0);
+}
+// boss
+const BOSS = { on: false, hp: 0, max: 120, g: null, s: 0, lat: 0, x: 0, y: 0, z: 0, vx: 0, vz: 0, atkT: 0, flash: 0, bombs: [], orbs: [], dead: false };
+function buildBoss() {
+  const g = new THREE.Group(); g.visible = false; scene.add(g);
+  const hull = new THREE.MeshPhysicalMaterial({ color: 0x8c93a6, roughness: .25, metalness: .9, clearcoat: 1, emissive: 0xff2a3a, emissiveIntensity: 0 });
+  BOSS.hull = hull;
+  part(new THREE.SphereGeometry(1, 40, 16), hull, g, null, [6.5, 1.1, 6.5]);
+  part(new THREE.TorusGeometry(6.4, .35, 10, 48), new THREE.MeshStandardMaterial({ color: 0x2a2d36, roughness: .4, metalness: .8 }), g, null, null, [Math.PI / 2, 0, 0]);
+  part(new THREE.SphereGeometry(2.6, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshPhysicalMaterial({ color: 0x7fe0ff, transparent: true, opacity: .45, roughness: .05, clearcoat: 1 }), g, [0, .6, 0]);
+  // an angry face peering out of the dome
+  part(SPH, new THREE.MeshStandardMaterial({ color: 0x8a4fd8, roughness: .5 }), g, [0, 1.3, 0], [1.6, 1.4, 1.6]);
+  for (const s of [-1, 1]) {
+    part(SPH, new THREE.MeshBasicMaterial({ color: 0xffffff }), g, [s * .55, 1.65, -1.25], [.38, .38, .2]);
+    part(SPH, new THREE.MeshBasicMaterial({ color: 0xff2a2a }), g, [s * .55, 1.65, -1.42], [.18, .18, .08]);
+    part(new THREE.BoxGeometry(.7, .14, .1), new THREE.MeshBasicMaterial({ color: 0x1a0a2a }), g, [s * .55, 2.05, -1.35], null, [0, 0, s * .45]);
+  }
+  BOSS.lights = [];
+  for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2; BOSS.lights.push(part(SPH, new THREE.MeshBasicMaterial({ color: k % 2 ? 0xffd23f : 0x35e6ff }), g, [Math.cos(a) * 5.6, -.35, Math.sin(a) * 5.6], [.28, .28, .28])); }
+  for (const s of [-1, 1]) part(new THREE.CylinderGeometry(.4, .55, 1.6, 12), WM.gun, g, [s * 3.2, -1, -2.2], null, [Math.PI / 2.6, 0, 0]);
+  BOSS.beam = part(new THREE.CylinderGeometry(2.4, 5, 10, 24, 1, true), new THREE.MeshBasicMaterial({ color: 0x9ff6ff, transparent: true, opacity: .08, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), g, [0, -6, 0]);
+  BOSS.g = g;
+}
+function resetCombat() {
+  for (const b of BOLTS) scene.remove(b.m); BOLTS.length = 0;
+  for (const b of BOSS.bombs) scene.remove(b.m); BOSS.bombs.length = 0;
+  for (const o of BOSS.orbs) scene.remove(o.m); BOSS.orbs.length = 0;
+  P.heat = 0; P.overheat = false; P.gunCD = 0; P.bossDmg = 0;
+  for (const r of RIV) { r.gunT = 2 + Math.random() * 3; r.burst = 0; }
+  BOSS.on = save.mode === 'boss'; BOSS.dead = false; BOSS.hp = BOSS.max; BOSS.atkT = 4; BOSS.flash = 0;
+  if (!BOSS.g) buildBoss();
+  BOSS.g.visible = BOSS.on; $('bossBar').hidden = !BOSS.on;
+  if (BOSS.on) { const p = playerS(); BOSS.s = p.s + 40 / (TRACK_LEN / N); BOSS.lat = 0; placeBoss(0); }
+}
+function placeBoss(t) {
+  const i = trackPos(BOSS.s, BOSS.lat, tmp2);
+  const ox = BOSS.x, oz = BOSS.z;
+  BOSS.x = tmp2.x; BOSS.z = tmp2.z; BOSS.y = tmp2.y + 7.5 + Math.sin(t * 1.6) * .8;
+  BOSS.vx = (BOSS.x - ox) * 60; BOSS.vz = (BOSS.z - oz) * 60;
+  BOSS.g.position.set(BOSS.x, BOSS.y, BOSS.z); BOSS.g.rotation.y = headingAt(i) + Math.PI + Math.sin(t * .7) * .25; BOSS.g.rotation.z = Math.sin(t * 1.1) * .08;
+}
+function bossHit(dmg, x, y, z) {
+  if (!BOSS.on || BOSS.dead) return;
+  BOSS.hp -= dmg; BOSS.flash = .12;
+  emit(tmp.set(x, y, z), (Math.random() - .5) * 4, Math.random() * 3, (Math.random() - .5) * 4, .3, .5, .8, 0xffd27a, true, 1, -4);
+  if (BOSS.hp <= 0) {
+    BOSS.hp = 0; BOSS.dead = true; msg('Кралят на НЛО е победен!', 2.2); blip(220, .6, 'sawtooth'); setTimeout(() => blip(660, .3, 'triangle'), 250); setTimeout(() => blip(990, .4, 'triangle'), 500);
+    for (let q = 0; q < 160; q++) emit(tmp.set(BOSS.x + (Math.random() - .5) * 8, BOSS.y + (Math.random() - .5) * 3, BOSS.z + (Math.random() - .5) * 8), (Math.random() - .5) * 20, Math.random() * 14, (Math.random() - .5) * 20, 1.6, 1 + Math.random(), 2, [0xff6a1a, 0xffd27a, 0xff3a6a, 0x9ff6ff][q % 4], true, 1, -6);
+    shake = 1; confetti();
+  }
+}
+function bossAttack() {
+  const p = playerS(), ds = TRACK_LEN / N, sp = Math.hypot(P.vx, P.vz), angry = BOSS.hp < BOSS.max / 2;
+  if (Math.random() < .6) {
+    // bombs: red rings appear on the road where you are about to be, then explode
+    const n = angry ? 5 : 3;
+    for (let k = 0; k < n; k++) {
+      const s = p.s + (sp * 1.4 + (Math.random() - .3) * 14) / ds, lat = Math.max(-ROAD_W / 2 + 1, Math.min(ROAD_W / 2 - 1, p.lat + (Math.random() - .5) * 7));
+      const pos = V3(0, 0, 0); const i = trackPos(s, lat, pos);
+      const m = new THREE.Mesh(new THREE.RingGeometry(2.1, 2.6, 32), WM.ring); m.rotation.x = -Math.PI / 2; m.position.copy(pos).add(V3(0, .12, 0)); scene.add(m);
+      BOSS.bombs.push({ m, x: pos.x, y: pos.y, z: pos.z, t: 1.4 + k * .12 });
+    }
+    blip(400, .2, 'square');
+  } else {
+    // glowing orbs that chase you for a few seconds; shoot them down or dodge
+    for (let k = 0; k < (angry ? 3 : 2); k++) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(.55, 16, 10), WM.boltB); m.position.set(BOSS.x + (k - .5) * 3, BOSS.y - 1.5, BOSS.z); scene.add(m);
+      BOSS.orbs.push({ m, v: V3(0, 0, 0), life: 4.5 });
+    }
+    blip(300, .3, 'sawtooth');
+  }
+}
+function combatStep(dt, live) {
+  const ds = TRACK_LEN / N, t = clock;
+  // the player's blaster: hold to fire, it heats up
+  P.gunCD -= dt; P.heat = Math.max(0, P.heat - dt * (P.overheat ? 22 : 34));
+  if (P.overheat && P.heat < 25) P.overheat = false;
+  if (live && keys.fire && !P.overheat && P.gunCD <= 0 && !(P.lockT > 0) && K.veh.gun) {
+    P.gunCD = .14; P.heat += 9; if (P.heat >= 100) { P.heat = 100; P.overheat = true; msg('Бластерът прегря!', .8, true); blip(120, .25, 'sawtooth'); }
+    let tgt = null;
+    if (BOSS.on && !BOSS.dead && Math.hypot(BOSS.x - P.x, BOSS.z - P.z) < 120) tgt = { x: BOSS.x, y: BOSS.y, z: BOSS.z, vx: BOSS.vx, vz: BOSS.vz };
+    else { const me = playerS(); let best = 70 / ds; for (const r of RIV) { const d = r.s - me.s; if (d > 0 && d < best && Math.abs(r.lat - me.lat) < 8) { best = d; tgt = { x: r.x, y: r.y + .6, z: r.z, vx: TT[r.i].x * r.v, vz: TT[r.i].z * r.v }; } } }
+    for (const o of BOSS.orbs) if (Math.hypot(o.m.position.x - P.x, o.m.position.z - P.z) < 25) { tgt = { x: o.m.position.x, y: o.m.position.y, z: o.m.position.z }; break; }
+    shoot(K.veh, P, tgt, P, .02); blip(1400 + Math.random() * 200, .05, 'square');
+  }
+  // rivals: in a race they take pot shots at whoever is just ahead, in boss mode they shoot the boss
+  if (live) for (const r of RIV) {
+    if (r.spinT > 0) continue;
+    r.gunT -= dt;
+    if (r.gunT <= 0 && r.burst <= 0) { r.burst = 3 + (Math.random() * 3 | 0); r.gunT = BOSS.on ? 1.2 + Math.random() * 1.5 : 3 + Math.random() * 4; }
+    if (r.burst > 0 && (r.burstCD = (r.burstCD || 0) - dt) <= 0) {
+      r.burstCD = .18; r.burst--;
+      let tgt = null;
+      if (BOSS.on && !BOSS.dead && Math.hypot(BOSS.x - r.x, BOSS.z - r.z) < 110) tgt = { x: BOSS.x, y: BOSS.y, z: BOSS.z, vx: BOSS.vx, vz: BOSS.vz };
+      else if (!BOSS.on) { const me = playerS(), gap = (me.s - r.s) * ds; if (gap > 3 && gap < 45 && Math.abs(me.lat - r.lat) < 6) tgt = { x: P.x, y: P.y + .6, z: P.z, vx: P.vx, vz: P.vz }; }
+      if (tgt) shoot(r.veh, { head: r.g.rotation.y }, tgt, r, BOSS.on ? .05 : .09); else r.burst = 0;
+    }
+  }
+  // bolts
+  for (let n = BOLTS.length - 1; n >= 0; n--) {
+    const b = BOLTS[n]; b.life -= dt; b.m.position.addScaledVector(b.v, dt);
+    const q = b.m.position; let hit = false;
+    if (BOSS.on && !BOSS.dead && Math.hypot(q.x - BOSS.x, q.z - BOSS.z) < 7 && Math.abs(q.y - BOSS.y) < 3.5) { bossHit(b.owner === P ? 2 : .35, q.x, q.y, q.z); if (b.owner === P) P.bossDmg += 2; hit = true; }
+    if (!hit) for (const o of BOSS.orbs) if (o.m.position.distanceTo(q) < 1) { o.life = 0; hit = true; break; }
+    if (!hit && b.owner !== P && (q.x - P.x) ** 2 + (q.z - P.z) ** 2 < 1.6 && Math.abs(q.y - P.y - .6) < 1.2) {
+      hit = true; if (P.shieldT > 0 || P.cometT > 0) { /* bounces off */ } else { P.vx *= .86; P.vz *= .86; shake = Math.min(1, shake + .3); blip(160, .08, 'sawtooth'); }
+    }
+    if (!hit) for (const r of RIV) if (r !== b.owner && (q.x - r.x) ** 2 + (q.z - r.z) ** 2 < 1.8 && Math.abs(q.y - r.y - .6) < 1.2) {
+      hit = true; r.v *= .7; if (!(r.spinT > 0) && Math.random() < .35) r.spinT = 1.3; if (b.owner === P) blip(900, .05, 'triangle'); break;
+    }
+    if (hit) for (let k = 0; k < 5; k++) emit(q, (Math.random() - .5) * 5, Math.random() * 3, (Math.random() - .5) * 5, .25, .15, .4, b.owner === P ? 0x9ff6ff : 0xffc27a, true, 1, -8);
+    if (hit || b.life <= 0) { scene.remove(b.m); BOLTS.splice(n, 1); }
+  }
+  // the boss stays ahead of the player and attacks
+  if (BOSS.on && !BOSS.dead) {
+    const p = playerS(), want = p.s + (BOSS.hp < BOSS.max / 2 ? 26 : 32) / ds;
+    BOSS.s += (want - BOSS.s) * Math.min(1, dt * 1.2); BOSS.lat = Math.sin(t * .45) * (ROAD_W / 2 - 1);
+    placeBoss(t);
+    if (live) { BOSS.atkT -= dt; if (BOSS.atkT <= 0) { bossAttack(); BOSS.atkT = BOSS.hp < BOSS.max / 2 ? 1.6 : 2.4; } }
+  } else if (BOSS.on && BOSS.dead && BOSS.g.visible) { BOSS.y -= dt * 12; BOSS.g.position.y = BOSS.y; BOSS.g.rotation.z += dt * 3; if (BOSS.y < -30) BOSS.g.visible = false; }
+  for (let n = BOSS.bombs.length - 1; n >= 0; n--) {
+    const b = BOSS.bombs[n]; b.t -= dt; b.m.scale.setScalar(1 + Math.max(0, 1.4 - b.t) * .15);
+    if (b.t <= 0) {
+      for (let q = 0; q < 22; q++) emit(tmp.set(b.x, b.y + .5, b.z), (Math.random() - .5) * 10, 2 + Math.random() * 7, (Math.random() - .5) * 10, .7, .9, 1.5, Math.random() < .5 ? 0xff6a1a : 0xffd27a, true, 1, -6);
+      if (Math.hypot(b.x - P.x, b.z - P.z) < 2.8 && Math.abs(P.y - b.y) < 2.5) hitKart(P, P.x, P.y, P.z);
+      for (const r of RIV) if (Math.hypot(b.x - r.x, b.z - r.z) < 2.8) hitKart(r, r.x, r.y, r.z);
+      if (Math.hypot(b.x - P.x, b.z - P.z) < 40) { blip(70, .35, 'sawtooth'); shake = Math.min(1, shake + .35); }
+      scene.remove(b.m); BOSS.bombs.splice(n, 1);
+    }
+  }
+  for (let n = BOSS.orbs.length - 1; n >= 0; n--) {
+    const o = BOSS.orbs[n]; o.life -= dt;
+    tmp.set(P.x - o.m.position.x, P.y + .6 - o.m.position.y, P.z - o.m.position.z); const d = tmp.length();
+    o.v.addScaledVector(tmp.normalize(), dt * 30); o.v.clampLength(0, 21); o.m.position.addScaledVector(o.v, dt);
+    o.m.scale.setScalar(1 + Math.sin(t * 12) * .15);
+    if (d < 1.4) { hitKart(P, P.x, P.y, P.z); o.life = 0; }
+    if (Math.random() < .5) emit(o.m.position, 0, 0, 0, .3, .4, 1, 0xff3a6a, true, .8, 0);
+    if (o.life <= 0) { scene.remove(o.m); BOSS.orbs.splice(n, 1); }
+  }
+}
+function combatFx(dt, t) {
+  // turrets turn toward what they shoot at
+  const aimAt = (V, from, tx, tz) => { if (!V.gun) return; const a = Math.atan2(tx - from.x, tz - from.z) - from.yaw; let d = a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; V.gun.yaw.rotation.y += (Math.max(-.7, Math.min(.7, d)) - V.gun.yaw.rotation.y) * Math.min(1, dt * 8); };
+  if (BOSS.on && !BOSS.dead) aimAt(K.veh, { x: P.x, z: P.z, yaw: P.head }, BOSS.x, BOSS.z);
+  else if (K.veh.gun) K.veh.gun.yaw.rotation.y *= .9;
+  for (const r of RIV) if (BOSS.on && !BOSS.dead) aimAt(r.veh, { x: r.x, z: r.z, yaw: r.g.rotation.y }, BOSS.x, BOSS.z);
+  if (BOSS.on && BOSS.g.visible) {
+    BOSS.flash -= dt; BOSS.hull.emissiveIntensity = BOSS.flash > 0 ? 1 : BOSS.hp < BOSS.max / 2 ? .25 + Math.sin(t * 8) * .2 : 0;
+    BOSS.lights.forEach((l, k) => l.visible = Math.sin(t * 6 + k) > -.2);
+    BOSS.beam.material.opacity = .06 + Math.sin(t * 3) * .03;
+    $('bossHp').style.width = (BOSS.hp / BOSS.max * 100).toFixed(1) + '%';
+  }
+  const hb = $('hHeat'); hb.style.width = Math.round(P.heat || 0) + '%'; hb.classList.toggle('hot', !!P.overheat);
+}
+
 /* ================= main loop ================= */
 let last = performance.now(), clock = 0;
 function update(dt) {
@@ -3699,7 +3914,7 @@ function update(dt) {
     else if (P.fallT <= 0) { const f = FIRE.reduce((b, f) => Math.hypot(P.x - f.x, P.z - f.z) < Math.hypot(P.x - b.x, P.z - b.z) ? f : b, FIRE[0]); respawnBefore(f); }
   } else if (state === 'race') physics(dt, t, true);
   else if (state === 'done' || state === 'end') physics(dt, t, false);
-  if (state === 'race' || state === 'done' || state === 'end') { rivalsStep(dt, state === 'race'); itemsStep(dt, state === 'race'); }
+  if (state === 'race' || state === 'done' || state === 'end') { rivalsStep(dt, state === 'race'); itemsStep(dt, state === 'race'); combatStep(dt, state === 'race'); }
   else if (state === 'count') rivalsStep(dt, false);
   if (msgT > 0) { msgT -= dt; if (msgT <= 0) $('msg').textContent = ''; }
 }
@@ -3729,6 +3944,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 if (!TRACKS[save.track]) save.track = 'star'; buildWorld(save.track);
+for (const k in K.vehs) addGun(K.vehs[k], k);
 applyLook(); buildRivals(); resetRace(); applyQuality(); applyTouch(); toMenu();
 if (location.hash === '#debug') window.__td = { P, TP, TT, N, keys: kb, save, W, TY, RIV, renderer, scene, camera, perf: () => { const t0 = performance.now(); for (let k = 0; k < 20; k++) { update(1 / 60); visuals(1 / 60, clock); renderer.render(scene, camera); } renderer.getContext().finish(); return { ms: (performance.now() - t0) / 20, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geos: renderer.info.memory.geometries, progs: renderer.info.programs.length }; }, get state() { return state; }, get coins() { return raceCoins; }, set snap(v) { camSnap = v; }, step(sec, fn) { for (let k = 0; k < sec * 60; k++) { if (fn) fn(); update(1 / 60); } } };
 requestAnimationFrame(frame);

@@ -119,7 +119,12 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
 .touch .tcam { right: 6px; bottom: 254px; }
 .touch .hbrake { position: absolute; right: 96px; bottom: 150px; width: 104px; height: 66px; border-radius: 14px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.3); padding: 4px; }
 .touch .hbrake svg { width: 100%; height: 100%; }
-.touch .acts { display: grid; grid-template-columns: repeat(2, 58px); gap: 10px; margin-right: 6px; margin-bottom: 4px; }
+.touch .acts { display: flex; flex-direction: column; gap: 10px; margin-right: 6px; margin-bottom: 4px; }
+/* handbrake sits right above the gas pedal, boost right above the brake: both reachable without moving the thumb far */
+.touch .act.hand { position: absolute; right: 0; bottom: 160px; width: 78px; height: 70px; border-radius: 18px; border-color: #ffd23f; color: #ffe27a; }
+.touch .act.hand svg { width: 34px; height: 34px; }
+.touch .act.boost { position: absolute; right: 85px; bottom: 106px; width: 76px; height: 76px; }
+.touch .act.boost svg { width: 32px; height: 32px; }
 .touch .act { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; background: rgba(9,12,20,.42); border: 1.5px solid rgba(255,255,255,.45); color: #fff; font: 400 20px var(--display); padding: 0; }
 .touch .act svg { width: 26px; height: 26px; }
 .touch .act.fire { border-color: #ff8a6a; color: #ffb39e; }
@@ -237,9 +242,9 @@ button:focus-visible, .chip input:focus-visible + span, .track input:focus-visib
       <div class="acts">
         <button type="button" class="act" data-k="item" aria-label="Предмет">?</button>
         <button type="button" class="act fire" data-k="fire" aria-label="Стрелба"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-        <button type="button" class="act boost" data-k="boost" id="tBoost" aria-label="Буст"><svg viewBox="0 0 24 24"><path d="M13 2 5 14h6l-1 8 8-12h-6z" fill="currentColor"/></svg></button>
-        <button type="button" class="act" data-k="hop" aria-label="Ръчна спирачка за дрифт"><svg viewBox="0 0 24 24"><path d="M4 6l10 4 3 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18" cy="17.5" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
       </div>
+        <button type="button" class="act boost" data-k="boost" id="tBoost" aria-label="Буст"><svg viewBox="0 0 24 24"><path d="M13 2 5 14h6l-1 8 8-12h-6z" fill="currentColor"/></svg></button>
+        <button type="button" class="act hand" data-k="hop" aria-label="Ръчна спирачка за дрифт"><svg viewBox="0 0 24 24"><path d="M4 6l10 4 3 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18" cy="17.5" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
       <button type="button" class="pedal brake" data-k="brake" aria-label="Спирачка"></button>
       <button type="button" class="pedal gas" data-k="gas" aria-label="Газ"></button>
       <button type="button" id="tRev" hidden aria-pressed="false">R</button><button type="button" id="tCam" hidden>C</button>
